@@ -156,6 +156,8 @@ async function ulozitDoSupabase(v: ImportVysledek, container: HTMLElement): Prom
 
   btn.textContent = `✅ Uloženo ${ulozeno} záznamů`
   btn.style.background = '#2a9d5c'
+  btn.style.color = '#fff'
+  btn.disabled = false
 }
 
 function resetUI(container: HTMLElement): void {
