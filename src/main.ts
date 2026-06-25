@@ -1,6 +1,7 @@
 import './style.css'
 import { renderImportJimp } from './modules/import-obd/ImportJimp'
 import { renderImportJsc } from './modules/import-obd/ImportJsc'
+import { renderImportBC } from './modules/import-obd/ImportBC'
 import './modules/import-obd/importJimp.css'
 
 const MODULY = [
@@ -36,6 +37,9 @@ function renderModul(id: string): void {
       break
     case 'import-jsc':
       renderImportJsc(obsah)
+      break
+    case 'import-bc':
+      renderImportBC(obsah)
       break
     default:
       obsah.innerHTML = `

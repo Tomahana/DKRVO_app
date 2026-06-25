@@ -223,3 +223,10 @@ body {
 }
 
 .btn-secondary:hover { background: #161b27; color: #e8e8e8; }
+.stat-skupina { display: flex; align-items: center; gap: 0.5rem; background: #161b27; border: 1px solid #2a2f3d; border-radius: 8px; padding: 0.5rem 1rem; }
+.stat-skupina .stat { border: none; background: none; padding: 0.25rem 0.5rem; min-width: auto; }
+.stat-label { font-size: 0.8rem; color: #666; white-space: nowrap; }
+.bc-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.tab-btn { background: #161b27; border: 1px solid #2a2f3d; border-radius: 8px; padding: 0.45rem 1rem; color: #8b92a5; cursor: pointer; font-size: 0.875rem; transition: all 0.15s; }
+.tab-btn:hover { background: #1e2436; color: #e8e8e8; }
+.tab-btn--aktivni { background: #1e2d4a; color: #4f8ef7; border-color: #4f8ef7; font-weight: 500; }
