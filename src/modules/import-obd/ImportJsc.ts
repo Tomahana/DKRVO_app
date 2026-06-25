@@ -1,4 +1,5 @@
-import { parseXlsxJsc, ImportVysledekJsc, JscRadekParsed } from '../../lib/importJsc'
+import { parseXlsxJsc } from '../../lib/importJsc'
+import type { ImportVysledekJsc, JscRadekParsed } from '../../lib/importJsc'
 
 export function renderImportJsc(container: HTMLElement): void {
   container.innerHTML = `

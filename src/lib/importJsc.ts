@@ -5,7 +5,8 @@
  */
 
 import * as XLSX from 'xlsx'
-import { parseAutory, AutorParsed } from './importJimp'
+import { parseAutory } from './importJimp'
+import type { AutorParsed } from './importJimp'
 
 export interface JscRadekParsed {
   obd_id: string
