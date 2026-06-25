@@ -4,6 +4,7 @@
  */
 
 import * as XLSX from 'xlsx'
+import { supabase } from './supabase'
 
 export interface OBDRadekJimp {
   ID: string
@@ -211,4 +212,85 @@ export function parseXlsxJimp(buffer: ArrayBuffer): ImportVysledek {
     radky: parsovane,
     kriticke_chyby,
   }
+}
+
+export async function ulozitJimpDoSupabase(
+  vysledek: ImportVysledek
+): Promise<{ ulozeno: number; chyby: string[] }> {
+  const chyby: string[] = []
+  let ulozeno = 0
+
+  for (const radek of vysledek.radky) {
+    if (radek.chyby.length > 0) continue  // přeskoč záznamy s chybami
+
+    try {
+      // 1. Upsert do vysledky_jimp
+      const { data: jimp, error: errJimp } = await supabase
+        .from('vysledky_jimp')
+        .upsert({
+          obd_id: radek.obd_id,
+          rok: radek.rok,
+          stav: radek.stav,
+          nazev: radek.nazev,
+          casopis_nazev_raw: radek.casopis_nazev_raw,
+          rocnik: radek.rocnik,
+          cislo: radek.cislo,
+          strany: radek.strany,
+          issn: radek.issn,
+          eissn: radek.eissn,
+          wos_ut: radek.wos_ut,
+          databaze_sci: radek.databaze_sci,
+          stav_oa: radek.stav_oa,
+          dedikace_raw: radek.dedikace_raw,
+          riv_id: radek.riv_id,
+          doi_url: radek.doi_urls.join(', '),
+        }, {
+          onConflict: 'obd_id',  // pokud záznam existuje, aktualizuj ho
+        })
+        .select('id')
+        .single()
+
+      if (errJimp || !jimp) {
+        chyby.push(`OBD ${radek.obd_id}: ${errJimp?.message ?? 'chyba upsert'}`)
+        continue
+      }
+
+      const vysledek_id = jimp.id
+
+      // 2. Smaž staré autory tohoto záznamu (před novým upsert)
+      await supabase
+        .from('vysledky_autori')
+        .delete()
+        .eq('vysledek_id', vysledek_id)
+        .eq('typ_vystupu', 'JIMP')
+
+      // 3. Vlož autory
+      if (radek.autori.length > 0) {
+        const autoriData = radek.autori.map(a => ({
+          typ_vystupu: 'JIMP',
+          vysledek_id,
+          autor_raw: a.autor_raw,
+          jmeno_raw: a.jmeno_raw,
+          externi: a.externi,
+          pracoviste_kod_raw: a.pracoviste_kod_raw || null,
+          poradi_autora: a.poradi_autora,
+        }))
+
+        const { error: errAutori } = await supabase
+          .from('vysledky_autori')
+          .insert(autoriData)
+
+        if (errAutori) {
+          chyby.push(`OBD ${radek.obd_id} autoři: ${errAutori.message}`)
+        }
+      }
+
+      ulozeno++
+
+    } catch (err) {
+      chyby.push(`OBD ${radek.obd_id}: neočekávaná chyba — ${err}`)
+    }
+  }
+
+  return { ulozeno, chyby }
 }
