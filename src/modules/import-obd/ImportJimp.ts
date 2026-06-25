@@ -1,4 +1,4 @@
-import { parseTsvJimp, parseXlsxJimp } from '../../lib/importJimp'
+import { parseTsvJimp, parseXlsxJimp, ulozitJimpDoSupabase } from '../../lib/importJimp'
 import type { ImportVysledek, JimpRadekParsed } from '../../lib/importJimp'
 
 export function renderImportJimp(container: HTMLElement): void {
@@ -142,10 +142,20 @@ async function ulozitDoSupabase(v: ImportVysledek, container: HTMLElement): Prom
   btn.disabled = true
   btn.textContent = 'Ukládám…'
 
-  // TODO: Prompt 7 — skutečný upsert do Supabase
-  await new Promise(r => setTimeout(r, 1000))
+  const { ulozeno, chyby } = await ulozitJimpDoSupabase(v)
 
-  btn.textContent = `✅ Uloženo ${v.ok} záznamů`
+  if (chyby.length > 0) {
+    const chybyEl = container.querySelector('#import-chyby') as HTMLElement
+    chybyEl.classList.remove('hidden')
+    chybyEl.innerHTML = `
+      <strong>Chyby při ukládání (${chyby.length}):</strong>
+      <ul>${chyby.slice(0, 20).map(c => `<li>${c}</li>`).join('')}</ul>
+      ${chyby.length > 20 ? `<p>… a dalších ${chyby.length - 20} chyb</p>` : ''}
+    `
+  }
+
+  btn.textContent = `✅ Uloženo ${ulozeno} záznamů`
+  btn.style.background = '#2a9d5c'
 }
 
 function resetUI(container: HTMLElement): void {
