@@ -100,7 +100,11 @@ function zobrazVysledky(v: ImportVysledekBC, container: HTMLElement): void {
   renderTabulka(v, 'knihy', container)
 }
 
-function renderTabulka(v: ImportVysledekBC, tab: 'knihy' | 'kapitoly', container: HTMLElement): void {
+function renderTabulka(
+  v: ImportVysledekBC,
+  tab: 'knihy' | 'kapitoly',
+  container: HTMLElement
+): void {
   const tabulka = container.querySelector('#bc-tabulka') as HTMLElement
   tabulka.classList.remove('hidden')
 
@@ -118,10 +122,31 @@ function renderTabulka(v: ImportVysledekBC, tab: 'knihy' | 'kapitoly', container
       <table>
         <thead><tr>
           <th>OBD ID</th><th>Rok</th><th>Název kapitoly</th>
-          <th>Kniha (ISBN)</th><th>Strany</th><th>Podíl</th><th>Autoři</th><th>Stav</th>
+          <th>ISBN knihy</th><th>Strany (kap.)</th><th>Podíl</th><th>Autoři</th><th>Stav</th>
         </tr></thead>
-        <tbody>${v.kapitoly.map(r => renderRadekC(r)).join('')}</tbody>
+        <tbody>${v.kapitoly.map((r, i) => renderRadekC(r, i)).join('')}</tbody>
       </table>`
+
+    // Listener pro ruční doplnění počtu stran knihy
+    tabulka.addEventListener('input', e => {
+      const input = e.target as HTMLInputElement
+      if (!input.classList.contains('input-stran-knihy')) return
+
+      const index = parseInt(input.dataset.index!)
+      const kapitola = v.kapitoly[index]
+      const pocetStranKnihy = parseInt(input.value, 10)
+
+      if (!isNaN(pocetStranKnihy) && pocetStranKnihy > 0 && kapitola.pocet_stran_kapitoly) {
+        const podil = kapitola.pocet_stran_kapitoly / pocetStranKnihy
+        kapitola.podil_stran = podil
+
+        const podilEl = tabulka.querySelector(`#podil-${index}`)
+        if (podilEl) {
+          podilEl.innerHTML = `<strong>${(podil * 100).toFixed(1)}%</strong>`
+          podilEl.classList.add('podil-ok')
+        }
+      }
+    })
   }
 }
 
@@ -141,18 +166,33 @@ function renderRadekB(r: BRadekParsed): string {
     </tr>`
 }
 
-function renderRadekC(r: CRadekParsed): string {
+function renderRadekC(r: CRadekParsed, index: number): string {
   const interni = r.autori.filter(a => !a.externi)
   const stavIcon = r.chyby.length > 0 ? '❌' : r.varovani.length > 0 ? '⚠️' : '✅'
-  const podil = r.podil_stran !== null ? `${(r.podil_stran * 100).toFixed(1)}%` : '—'
+  const pocetStranKap = r.pocet_stran_kapitoly ?? '—'
+  const podil = r.podil_stran !== null
+    ? `${(r.podil_stran * 100).toFixed(1)}%`
+    : `<span class="doplnit-wrap">
+        <input
+          type="number"
+          class="input-stran-knihy"
+          data-index="${index}"
+          placeholder="stran knihy"
+          min="1"
+          title="Zadej celkový počet stran knihy"
+        >
+        <span class="input-hint">→ ${pocetStranKap} stran kap.</span>
+       </span>`
+
   return `
-    <tr class="${r.chyby.length > 0 ? 'row-error' : r.varovani.length > 0 ? 'row-warn' : ''}">
+    <tr class="${r.chyby.length > 0 ? 'row-error' : r.varovani.length > 0 ? 'row-warn' : ''}"
+        data-obd="${r.obd_id}">
       <td>${r.obd_id}</td>
       <td>${r.rok}</td>
       <td class="td-nazev" title="${r.nazev}">${r.nazev.substring(0, 40)}${r.nazev.length > 40 ? '…' : ''}</td>
       <td title="${r.kniha_nazev_raw}">${r.kniha_isbn ?? '—'}</td>
-      <td>${r.strany_raw ?? '—'}</td>
-      <td>${podil}</td>
+      <td>${r.strany_raw ?? '—'} <small>(${pocetStranKap} str.)</small></td>
+      <td class="td-podil" id="podil-${index}">${podil}</td>
       <td>${interni.map(a => `${a.jmeno_raw} (${a.pracoviste_kod_raw})`).join(', ') || '—'}</td>
       <td title="${[...r.chyby, ...r.varovani].join(' | ')}">${stavIcon}</td>
     </tr>`

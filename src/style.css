@@ -230,3 +230,17 @@ body {
 .tab-btn { background: #161b27; border: 1px solid #2a2f3d; border-radius: 8px; padding: 0.45rem 1rem; color: #8b92a5; cursor: pointer; font-size: 0.875rem; transition: all 0.15s; }
 .tab-btn:hover { background: #1e2436; color: #e8e8e8; }
 .tab-btn--aktivni { background: #1e2d4a; color: #4f8ef7; border-color: #4f8ef7; font-weight: 500; }
+.doplnit-wrap { display: flex; align-items: center; gap: 0.4rem; }
+.input-stran-knihy {
+  width: 90px;
+  background: #1e2436;
+  border: 1px solid #4f8ef7;
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  color: #e8e8e8;
+  font-size: 0.8rem;
+}
+.input-stran-knihy:focus { outline: none; border-color: #7ab3ff; }
+.input-hint { font-size: 0.75rem; color: #666; white-space: nowrap; }
+.podil-ok { color: #2a9d5c; font-weight: 500; }
+td small { color: #666; font-size: 0.8rem; }
