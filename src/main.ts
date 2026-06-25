@@ -1,5 +1,6 @@
 import './style.css'
 import { renderImportJimp } from './modules/import-obd/ImportJimp'
+import { renderImportJsc } from './modules/import-obd/ImportJsc'
 import './modules/import-obd/importJimp.css'
 
 const MODULY = [
@@ -32,6 +33,9 @@ function renderModul(id: string): void {
   switch (id) {
     case 'import-jimp':
       renderImportJimp(obsah)
+      break
+    case 'import-jsc':
+      renderImportJsc(obsah)
       break
     default:
       obsah.innerHTML = `
