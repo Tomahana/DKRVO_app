@@ -3,6 +3,8 @@
  * Parsuje TSV export z OBD a připraví data pro Supabase
  */
 
+import * as XLSX from 'xlsx'
+
 export interface OBDRadekJimp {
   ID: string
   Stav: string
@@ -165,6 +167,42 @@ export function parseTsvJimp(tsv: string): ImportVysledek {
       preskocene++
     }
   }
+  return {
+    celkem: parsovane.length,
+    ok: parsovane.filter(r => r.chyby.length === 0).length,
+    s_chybami: parsovane.filter(r => r.chyby.length > 0).length,
+    preskocene,
+    radky: parsovane,
+    kriticke_chyby,
+  }
+}
+
+export function parseXlsxJimp(buffer: ArrayBuffer): ImportVysledek {
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  const radky = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, {
+    defval: '',
+    raw: false,
+  })
+
+  const parsovane: JimpRadekParsed[] = []
+  let preskocene = 0
+  const kriticke_chyby: string[] = []
+
+  for (let i = 0; i < radky.length; i++) {
+    const obj = radky[i]
+    if (obj['Rozšíření LiF']?.trim() && obj['Rozšíření LiF']?.trim() !== 'Jimp') {
+      preskocene++
+      continue
+    }
+    try {
+      parsovane.push(parseRadekJimp(obj as OBDRadekJimp, i + 2))
+    } catch (err) {
+      kriticke_chyby.push(`Řádek ${i + 2}: ${err}`)
+      preskocene++
+    }
+  }
+
   return {
     celkem: parsovane.length,
     ok: parsovane.filter(r => r.chyby.length === 0).length,

@@ -1,4 +1,4 @@
-import { parseTsvJimp } from '../../lib/importJimp'
+import { parseTsvJimp, parseXlsxJimp } from '../../lib/importJimp'
 import type { ImportVysledek, JimpRadekParsed } from '../../lib/importJimp'
 
 export function renderImportJimp(container: HTMLElement): void {
@@ -9,8 +9,8 @@ export function renderImportJimp(container: HTMLElement): void {
 
       <div class="drop-zone" id="drop-zone">
         <i class="icon-upload"></i>
-        <span>Přetáhni TSV soubor nebo <label for="file-input" class="file-label">vyber soubor</label></span>
-        <input type="file" id="file-input" accept=".tsv,.txt,.csv" style="display:none">
+        <span>Přetáhni XLSX nebo TXT soubor nebo <label for="file-input" class="file-label">vyber soubor</label></span>
+        <input type="file" id="file-input" accept=".xlsx,.tsv,.txt,.csv" style="display:none">
       </div>
 
       <div id="import-stats" class="import-stats hidden"></div>
@@ -53,12 +53,22 @@ export function renderImportJimp(container: HTMLElement): void {
 
 function zpracujSoubor(file: File, container: HTMLElement): void {
   const reader = new FileReader()
-  reader.onload = e => {
-    const tsv = e.target?.result as string
-    const vysledek = parseTsvJimp(tsv)
-    zobrazVysledky(vysledek, container)
+
+  if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+    reader.onload = e => {
+      const buffer = e.target?.result as ArrayBuffer
+      const vysledek = parseXlsxJimp(buffer)
+      zobrazVysledky(vysledek, container)
+    }
+    reader.readAsArrayBuffer(file)
+  } else {
+    reader.onload = e => {
+      const tsv = e.target?.result as string
+      const vysledek = parseTsvJimp(tsv)
+      zobrazVysledky(vysledek, container)
+    }
+    reader.readAsText(file, 'utf-8')
   }
-  reader.readAsText(file, 'utf-8')
 }
 
 function zobrazVysledky(v: ImportVysledek, container: HTMLElement): void {
