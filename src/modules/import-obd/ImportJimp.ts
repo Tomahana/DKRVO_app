@@ -1,4 +1,5 @@
-import { parseTsvJimp, ImportVysledek, JimpRadekParsed } from '../../lib/importJimp'
+import { parseTsvJimp } from '../../lib/importJimp'
+import type { ImportVysledek, JimpRadekParsed } from '../../lib/importJimp'
 
 export function renderImportJimp(container: HTMLElement): void {
   container.innerHTML = `
