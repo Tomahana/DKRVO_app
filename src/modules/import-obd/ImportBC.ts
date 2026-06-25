@@ -142,8 +142,13 @@ function renderTabulka(
 
         const podilEl = tabulka.querySelector(`#podil-${index}`)
         if (podilEl) {
-          podilEl.innerHTML = `<strong>${(podil * 100).toFixed(1)}%</strong>`
           podilEl.classList.add('podil-ok')
+          const podilVysledek = podilEl.querySelector(`#podil-vysledek-${index}`)
+          if (podilVysledek) {
+            podilVysledek.innerHTML = `<strong>${(podil * 100).toFixed(1)}%</strong>`
+          } else {
+            podilEl.innerHTML = `<strong>${(podil * 100).toFixed(1)}%</strong>`
+          }
         }
       }
     })
@@ -182,6 +187,7 @@ function renderRadekC(r: CRadekParsed, index: number): string {
           title="Zadej celkový počet stran knihy"
         >
         <span class="input-hint">→ ${pocetStranKap} stran kap.</span>
+        <span class="podil-vysledek" id="podil-vysledek-${index}"></span>
        </span>`
 
   return `
