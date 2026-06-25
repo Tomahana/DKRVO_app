@@ -1,7 +1,7 @@
 {
-  "name": "dkrvo-kalkulacka-uhk",
+  "name": "workspace",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "typescript": "latest",
-    "vite": "latest"
+    "typescript": "~6.0.2",
+    "vite": "^8.1.0"
   }
 }
