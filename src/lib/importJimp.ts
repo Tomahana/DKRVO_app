@@ -4,7 +4,7 @@
  */
 
 import * as XLSX from 'xlsx'
-import { supabase } from './supabase'
+import { supabase, supabaseConfigError } from './supabase'
 
 export interface OBDRadekJimp {
   ID: string
@@ -217,6 +217,13 @@ export function parseXlsxJimp(buffer: ArrayBuffer): ImportVysledek {
 export async function ulozitJimpDoSupabase(
   vysledek: ImportVysledek
 ): Promise<{ ulozeno: number; chyby: string[] }> {
+  if (!supabase) {
+    return {
+      ulozeno: 0,
+      chyby: [supabaseConfigError ?? 'Supabase není nakonfigurovaný.'],
+    }
+  }
+
   const chyby: string[] = []
   let ulozeno = 0
 
