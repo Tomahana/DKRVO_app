@@ -220,6 +220,13 @@ export async function ulozitJimpDoSupabase(
   const chyby: string[] = []
   let ulozeno = 0
 
+  if (!supabase) {
+    return {
+      ulozeno: 0,
+      chyby: ['Supabase není nakonfigurovaný (chybí nebo je neplatné VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY).'],
+    }
+  }
+
   for (const radek of vysledek.radky) {
     if (radek.chyby.length > 0) continue  // přeskoč záznamy s chybami
 

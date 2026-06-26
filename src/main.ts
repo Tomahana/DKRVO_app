@@ -10,7 +10,7 @@ import {
   pocetCekajicichNavrhu
 } from './lib/auth'
 import type { Profil } from './lib/auth'
-import { supabase } from './lib/supabase'
+import { supabase, supabaseInitError } from './lib/supabase'
 
 const MODULY = [
   { id: 'import-jimp',  label: 'Import JIMP',    ikona: '📥', role: ['admin','prorektor','spravce_obd'] },
@@ -113,6 +113,10 @@ async function init(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app')!
 
   try {
+    if (!supabase) {
+      throw (supabaseInitError ?? new Error('Supabase klient není dostupný.'))
+    }
+
     // Zjisti stav přihlášení
     const { data: { session } } = await supabase.auth.getSession()
 
@@ -158,19 +162,21 @@ async function init(): Promise<void> {
 }
 
 // Sleduj změny auth stavu (magic link callback)
-supabase.auth.onAuthStateChange(async (event, _session) => {
-  if (event === 'SIGNED_IN') {
-    aktualniProfil = await nactiProfil()
-    if (aktualniProfil) {
-      await renderApp()
-    } else {
-      await init()
+if (supabase) {
+  supabase.auth.onAuthStateChange(async (event, _session) => {
+    if (event === 'SIGNED_IN') {
+      aktualniProfil = await nactiProfil()
+      if (aktualniProfil) {
+        await renderApp()
+      } else {
+        await init()
+      }
+    } else if (event === 'SIGNED_OUT') {
+      aktualniProfil = null
+      const app = document.querySelector<HTMLDivElement>('#app')!
+      renderLogin(app, () => {})
     }
-  } else if (event === 'SIGNED_OUT') {
-    aktualniProfil = null
-    const app = document.querySelector<HTMLDivElement>('#app')!
-    renderLogin(app, () => {})
-  }
-})
+  })
+}
 
 init()
