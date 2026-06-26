@@ -112,30 +112,64 @@ async function renderApp(): Promise<void> {
 async function init(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app')!
 
-  // Zjisti stav přihlášení
-  aktualniProfil = await nactiProfil()
+  try {
+    // Zjisti stav přihlášení
+    const { data: { session } } = await supabase.auth.getSession()
 
-  if (!aktualniProfil) {
-    // Zobraz login
-    renderLogin(app, () => {
-      // Po úspěšném přihlášení (magic link) se stránka sama refreshne
-    })
-    return
+    if (!session) {
+      renderLogin(app, () => {})
+      return
+    }
+
+    aktualniProfil = await nactiProfil()
+
+    if (!aktualniProfil) {
+      // Uživatel je přihlášen v Auth ale nemá profil v tabulce profily
+      app.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:1rem;color:#e8e8e8;background:#0f1117;">
+          <div style="font-size:2rem;">⚠️</div>
+          <div>Účet není nastaven. Kontaktuj administrátora.</div>
+          <div style="font-size:0.8rem;color:#666;">${session.user.email}</div>
+          <button onclick="supabase.auth.signOut().then(()=>location.reload())"
+            style="margin-top:1rem;padding:0.5rem 1rem;background:#4f8ef7;border:none;border-radius:8px;color:white;cursor:pointer;">
+            Odhlásit
+          </button>
+        </div>
+      `
+      return
+    }
+
+    await renderApp()
+
+  } catch (err) {
+    const app = document.querySelector<HTMLDivElement>('#app')!
+    app.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:1rem;color:#f87171;background:#0f1117;padding:2rem;text-align:center;">
+        <div style="font-size:2rem;">❌</div>
+        <div style="font-weight:500;">Chyba při spuštění aplikace</div>
+        <div style="font-size:0.85rem;color:#888;max-width:500px;">${err}</div>
+        <button onclick="location.reload()"
+          style="margin-top:1rem;padding:0.5rem 1rem;background:#4f8ef7;border:none;border-radius:8px;color:white;cursor:pointer;">
+          Zkusit znovu
+        </button>
+      </div>
+    `
   }
-
-  await renderApp()
 }
 
 // Sleduj změny auth stavu (magic link callback)
-supabase?.auth.onAuthStateChange(async (event) => {
-  if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+supabase.auth.onAuthStateChange(async (event, _session) => {
+  if (event === 'SIGNED_IN') {
     aktualniProfil = await nactiProfil()
     if (aktualniProfil) {
       await renderApp()
     } else {
-      const app = document.querySelector<HTMLDivElement>('#app')!
-      renderLogin(app, () => {})
+      await init()
     }
+  } else if (event === 'SIGNED_OUT') {
+    aktualniProfil = null
+    const app = document.querySelector<HTMLDivElement>('#app')!
+    renderLogin(app, () => {})
   }
 })
 
