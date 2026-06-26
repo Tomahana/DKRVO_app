@@ -1,13 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabaseConfigError =
-  !supabaseUrl || !supabaseAnonKey
-    ? "Chybí VITE_SUPABASE_URL nebo VITE_SUPABASE_ANON_KEY."
-    : null;
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    `Supabase není nakonfigurovaný — URL: "${supabaseUrl ?? 'chybí'}", KEY: "${supabaseAnonKey ? 'OK' : 'chybí'}"`
+  )
+}
 
-export const supabase = supabaseConfigError
-  ? null
-  : createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
