@@ -244,3 +244,123 @@ body {
 .input-hint { font-size: 0.75rem; color: #666; white-space: nowrap; }
 .podil-ok { color: #2a9d5c; font-weight: 500; }
 td small { color: #666; font-size: 0.8rem; }
+/* ── Login ── */
+.login-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: #0f1117;
+}
+
+.login-box {
+  background: #161b27;
+  border: 1px solid #2a2f3d;
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.login-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.login-hint {
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.login-input {
+  background: #0f1117;
+  border: 1px solid #2a2f3d;
+  border-radius: 8px;
+  padding: 0.65rem 1rem;
+  color: #e8e8e8;
+  font-size: 0.95rem;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: #4f8ef7;
+}
+
+.login-btn { width: 100%; justify-content: center; padding: 0.7rem; }
+
+.login-status {
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+
+.status-ok { background: #0f2a1a; color: #2a9d5c; border: 1px solid #1a4a2a; }
+.status-error { background: #2a0f0f; color: #f87171; border: 1px solid #4a1a1a; }
+/* ── Sidebar footer ── */
+.sidebar-footer {
+  margin-top: auto;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #2a2f3d;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.uzivatel-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.uzivatel-jmeno {
+  display: block;
+  font-size: 0.8rem;
+  color: #c8cdd8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uzivatel-role {
+  display: block;
+  font-size: 0.75rem;
+  color: #4f8ef7;
+}
+
+.btn-odhlasit {
+  background: none;
+  border: 1px solid #2a2f3d;
+  border-radius: 6px;
+  color: #666;
+  cursor: pointer;
+  padding: 0.35rem 0.5rem;
+  font-size: 1rem;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-odhlasit:hover { border-color: #f87171; color: #f87171; }
+
+/* ── Navigační odznak ── */
+.nav-odznak {
+  background: #f87171;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  margin-left: auto;
+}
