@@ -158,7 +158,7 @@ async function init(): Promise<void> {
 }
 
 // Sleduj změny auth stavu (magic link callback)
-supabase.auth.onAuthStateChange(async (event, session) => {
+supabase.auth.onAuthStateChange(async (event, _session) => {
   if (event === 'SIGNED_IN') {
     aktualniProfil = await nactiProfil()
     if (aktualniProfil) {
