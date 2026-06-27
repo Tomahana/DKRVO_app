@@ -123,46 +123,54 @@ function mapJcrRadek(radek: Record<string, string>): JCRRadekRozsireny {
   }
 }
 
-interface MapaSloupcu {
-  journal_name: number
+interface SloupceMap {
+  nazev: number
   issn: number
   eissn: number
   kategorie: number
-  ais: number
-  ais_quartile: number
+  vydani: number | null
+  ais: number | null
+  ais_q: number | null
   jif: number
-  jif_quartile: number
-  jif_percentil: number
+  jif_q: number | null
+  jif_p: number | null
 }
 
-function najdiIndex(hlavicka: string[], moznosti: string[]): number {
-  const normalizovane = hlavicka.map((h) => h.toLowerCase().trim())
-  return normalizovane.findIndex((h) => moznosti.some((m) => h.includes(m)))
-}
+function mapujSloupce(hlavicka: string[]): SloupceMap | null {
+  // Normalizuj — lowercase, odstraň středníky a přebytečné mezery
+  const h = hlavicka.map((s) =>
+    String(s ?? '')
+      .toLowerCase()
+      .replace(/;/g, '')    // ← klíčová oprava pro 2021 formát
+      .trim()
+  )
 
-function mapujSloupce(hlavicka: string[]): MapaSloupcu | null {
-  const journal_name = najdiIndex(hlavicka, ['journal name', 'title', 'název'])
-  const issn = najdiIndex(hlavicka, ['issn'])
-  const eissn = najdiIndex(hlavicka, ['e-issn', 'eissn'])
-  const kategorie = najdiIndex(hlavicka, ['category', 'categories', 'kategorie'])
-  const ais = najdiIndex(hlavicka, ['article influence score', 'ais'])
-  const ais_quartile = najdiIndex(hlavicka, ['ais quartile', 'ais quart'])
-  const jif = najdiIndex(hlavicka, ['journal impact factor', 'jif'])
-  const jif_quartile = najdiIndex(hlavicka, ['jif quartile', 'jif quart'])
-  const jif_percentil = najdiIndex(hlavicka, ['jif percentile', 'jif %', 'jif percentil'])
+  const najdi = (...hledane: string[]): number => {
+    for (const hledany of hledane) {
+      const idx = h.findIndex((s) => s.includes(hledany.toLowerCase()))
+      if (idx >= 0) return idx
+    }
+    return -1
+  }
 
-  if (journal_name < 0) return null
+  const nazev = najdi('journal name')
+  const issn = najdi('issn')
+  const eissn = najdi('eissn')
+  const kategorie = najdi('category')
+
+  if (nazev < 0 || issn < 0 || kategorie < 0) return null
 
   return {
-    journal_name,
+    nazev,
     issn,
-    eissn,
+    eissn: eissn >= 0 ? eissn : -1,
     kategorie,
-    ais,
-    ais_quartile,
-    jif,
-    jif_quartile,
-    jif_percentil,
+    vydani: najdi('edition') >= 0 ? najdi('edition') : null,
+    ais: najdi('article influence score') >= 0 ? najdi('article influence score') : null,
+    ais_q: najdi('ais quartile') >= 0 ? najdi('ais quartile') : null,
+    jif: najdi('jif', '2020 jif', '2021 jif', '2022 jif', '2023 jif', '2024 jif', '2025 jif'),
+    jif_q: najdi('jif quartile') >= 0 ? najdi('jif quartile') : null,
+    jif_p: najdi('jif percentile') >= 0 ? najdi('jif percentile') : null,
   }
 }
 
@@ -174,19 +182,19 @@ function detekujRok(prvniRadekText: string, hlavicka: string[]): number {
   return Number.isFinite(rok) ? rok : 0
 }
 
-function parseRadek(bunky: string[], mapa: MapaSloupcu, _rok?: number): JCRRadek | null {
-  const nazev = (bunky[mapa.journal_name] ?? '').trim()
+function parseRadek(bunky: string[], mapa: SloupceMap, _rok?: number): JCRRadek | null {
+  const nazev = (bunky[mapa.nazev] ?? '').trim()
   if (!nazev) return null
 
   const issn = mapa.issn >= 0 ? normalizeIssn(bunky[mapa.issn] ?? '') : null
   const eissn = mapa.eissn >= 0 ? normalizeIssn(bunky[mapa.eissn] ?? '') : null
   const kategorie = mapa.kategorie >= 0 ? parseKategorie((bunky[mapa.kategorie] ?? '').trim()) : []
 
-  const ais_hodnota = mapa.ais >= 0 ? parseCislo((bunky[mapa.ais] ?? '').trim()) : null
-  const ais_kvartal = mapa.ais_quartile >= 0 ? normalizeQuartile((bunky[mapa.ais_quartile] ?? '').trim()) : null
+  const ais_hodnota = mapa.ais !== null ? parseCislo((bunky[mapa.ais] ?? '').trim()) : null
+  const ais_kvartal = mapa.ais_q !== null ? normalizeQuartile((bunky[mapa.ais_q] ?? '').trim()) : null
   const jif_hodnota = mapa.jif >= 0 ? parseCislo((bunky[mapa.jif] ?? '').trim()) : null
-  const jif_kvartal = mapa.jif_quartile >= 0 ? normalizeQuartile((bunky[mapa.jif_quartile] ?? '').trim()) : null
-  const jif_percentil = mapa.jif_percentil >= 0 ? parseCislo((bunky[mapa.jif_percentil] ?? '').trim()) : null
+  const jif_kvartal = mapa.jif_q !== null ? normalizeQuartile((bunky[mapa.jif_q] ?? '').trim()) : null
+  const jif_percentil = mapa.jif_p !== null ? parseCislo((bunky[mapa.jif_p] ?? '').trim()) : null
 
   return {
     nazev,
@@ -304,21 +312,20 @@ export function parseJCRCsv(text: string, rokOverride?: number): ImportVysledekJ
   // Parser pro starý formát 2021:
   // "NATURE MEDICINE,""1078-8956"",""1546-170X"",""BIOCHEMISTRY..."",""53.44"",""Q1"",""20.837"",";"
   function parseStaryRadek(radek: string): string[] {
-    // Odstraň vnější uvozovky a středník na konci
+    // Odstraň vnější uvozovky a středník/čárku na konci
     const ocisteny = radek
-      .replace(/^"/, '')           // začáteční "
-      .replace(/[",;]*$/, '')      // koncový "; nebo ","
       .trim()
+      .replace(/^"/, '')              // začáteční "
+      .replace(/[",;\s]+$/, '')       // koncový ", nebo ; nebo mezery
 
-    // Rozděl podle ,""  nebo "",
-    // Formát: hodnota1,""hodnota2"",""hodnota3"",...
-    const bunky: string[] = []
+    // Split podle ,""
     const parts = ocisteny.split(',""')
+    const bunky: string[] = []
 
     for (let i = 0; i < parts.length; i++) {
       const val = parts[i]
-        .replace(/^""|""$/g, '')   // odstraň dvojité uvozovky
-        .replace(/""/g, '"')       // escapované uvozovky
+        .replace(/""$/g, '')          // zbytky "" na konci
+        .replace(/""/g, '"')          // escapované uvozovky
         .trim()
       bunky.push(val)
     }
