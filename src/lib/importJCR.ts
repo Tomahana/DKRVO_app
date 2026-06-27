@@ -44,12 +44,16 @@ export interface CasopisAgregace {
 }
 
 export interface ImportVysledekJCR {
+  rok_metrik?: number
+  celkem_radku?: number
+  unikatnich_casopisu?: number
   celkem: number
   ok: number
   s_chybami: number
   preskocene: number
   radky: JCRRadekRozsireny[]
   kriticke_chyby: string[]
+  varovani?: string[]
 }
 
 export interface PozicniMetriky {
@@ -119,21 +123,82 @@ function mapJcrRadek(radek: Record<string, string>): JCRRadekRozsireny {
   }
 }
 
-function parseCsvRadky(csv: string): Record<string, string>[] {
-  const lines = csv.split(/\r?\n/).filter((line) => line.trim() !== '')
-  if (lines.length <= 1) return []
+interface MapaSloupcu {
+  journal_name: number
+  issn: number
+  eissn: number
+  kategorie: number
+  ais: number
+  ais_quartile: number
+  jif: number
+  jif_quartile: number
+  jif_percentil: number
+}
 
-  const delimiter = lines[0].includes(';') ? ';' : ','
-  const header = lines[0].split(delimiter).map((h) => h.trim())
+function najdiIndex(hlavicka: string[], moznosti: string[]): number {
+  const normalizovane = hlavicka.map((h) => h.toLowerCase().trim())
+  return normalizovane.findIndex((h) => moznosti.some((m) => h.includes(m)))
+}
 
-  return lines.slice(1).map((line) => {
-    const values = line.split(delimiter)
-    const row: Record<string, string> = {}
-    header.forEach((klic, idx) => {
-      row[klic] = (values[idx] ?? '').trim()
-    })
-    return row
-  })
+function mapujSloupce(hlavicka: string[]): MapaSloupcu | null {
+  const journal_name = najdiIndex(hlavicka, ['journal name', 'title', 'název'])
+  const issn = najdiIndex(hlavicka, ['issn'])
+  const eissn = najdiIndex(hlavicka, ['e-issn', 'eissn'])
+  const kategorie = najdiIndex(hlavicka, ['category', 'categories', 'kategorie'])
+  const ais = najdiIndex(hlavicka, ['article influence score', 'ais'])
+  const ais_quartile = najdiIndex(hlavicka, ['ais quartile', 'ais quart'])
+  const jif = najdiIndex(hlavicka, ['journal impact factor', 'jif'])
+  const jif_quartile = najdiIndex(hlavicka, ['jif quartile', 'jif quart'])
+  const jif_percentil = najdiIndex(hlavicka, ['jif percentile', 'jif %', 'jif percentil'])
+
+  if (journal_name < 0) return null
+
+  return {
+    journal_name,
+    issn,
+    eissn,
+    kategorie,
+    ais,
+    ais_quartile,
+    jif,
+    jif_quartile,
+    jif_percentil,
+  }
+}
+
+function detekujRok(prvniRadekText: string, hlavicka: string[]): number {
+  const kandidati = `${prvniRadekText} ${hlavicka.join(' ')}`
+  const match = kandidati.match(/\b(20\d{2})\b/)
+  if (!match) return 0
+  const rok = Number.parseInt(match[1], 10)
+  return Number.isFinite(rok) ? rok : 0
+}
+
+function parseRadek(bunky: string[], mapa: MapaSloupcu, _rok?: number): JCRRadek | null {
+  const nazev = (bunky[mapa.journal_name] ?? '').trim()
+  if (!nazev) return null
+
+  const issn = mapa.issn >= 0 ? normalizeIssn(bunky[mapa.issn] ?? '') : null
+  const eissn = mapa.eissn >= 0 ? normalizeIssn(bunky[mapa.eissn] ?? '') : null
+  const kategorie = mapa.kategorie >= 0 ? parseKategorie((bunky[mapa.kategorie] ?? '').trim()) : []
+
+  const ais_hodnota = mapa.ais >= 0 ? parseCislo((bunky[mapa.ais] ?? '').trim()) : null
+  const ais_kvartal = mapa.ais_quartile >= 0 ? normalizeQuartile((bunky[mapa.ais_quartile] ?? '').trim()) : null
+  const jif_hodnota = mapa.jif >= 0 ? parseCislo((bunky[mapa.jif] ?? '').trim()) : null
+  const jif_kvartal = mapa.jif_quartile >= 0 ? normalizeQuartile((bunky[mapa.jif_quartile] ?? '').trim()) : null
+  const jif_percentil = mapa.jif_percentil >= 0 ? parseCislo((bunky[mapa.jif_percentil] ?? '').trim()) : null
+
+  return {
+    nazev,
+    issn,
+    eissn,
+    kategorie,
+    ais_hodnota,
+    ais_kvartal,
+    jif_hodnota,
+    jif_kvartal,
+    jif_percentil,
+  }
 }
 
 function vypoctiPozici(poradi: number, celkem: number): PozicniMetriky {
@@ -199,17 +264,142 @@ export function formatujHodnoceni(hodnoceni: string | null): {
   return { label: hodnoceni, cssTrida: '', tooltip: '' }
 }
 
-export function parseJCRCsv(csv: string): ImportVysledekJCR {
+export function parseJCRCsv(text: string, rokOverride?: number): ImportVysledekJCR {
   const kriticke_chyby: string[] = []
-  const source = parseCsvRadky(csv)
-  const radky = source.map(mapJcrRadek)
+  const varovani: string[] = []
+
+  const radky = text.split(/\r?\n/).filter((r) => r.trim())
+
+  // Najdi hlavičkový řádek
+  let hlavickaIdx = -1
+  const prvniRadekText = radky[0] ?? ''
+
+  for (let i = 0; i < Math.min(radky.length, 5); i++) {
+    if (radky[i].toLowerCase().includes('journal name')) {
+      hlavickaIdx = i
+      break
+    }
+  }
+
+  if (hlavickaIdx < 0) {
+    return {
+      rok_metrik: rokOverride ?? 0,
+      celkem_radku: 0,
+      unikatnich_casopisu: 0,
+      radky: [],
+      kriticke_chyby: ['CSV: nenalezen hlavičkový řádek'],
+      varovani: [],
+      celkem: 0,
+      ok: 0,
+      s_chybami: 0,
+      preskocene: 0,
+    }
+  }
+
+  // Detekuj formát — starý 2021 nebo nový 2022+
+  const vzorkovyRadek = radky[hlavickaIdx + 1] ?? ''
+  const jeStaryFormat = vzorkovyRadek.startsWith('"') &&
+    vzorkovyRadek.includes('""')
+
+  // Parser pro starý formát 2021:
+  // "NATURE MEDICINE,""1078-8956"",""1546-170X"",""BIOCHEMISTRY..."",""53.44"",""Q1"",""20.837"",";"
+  function parseStaryRadek(radek: string): string[] {
+    // Odstraň vnější uvozovky a středník na konci
+    const ocisteny = radek
+      .replace(/^"/, '')           // začáteční "
+      .replace(/[",;]*$/, '')      // koncový "; nebo ","
+      .trim()
+
+    // Rozděl podle ,""  nebo "",
+    // Formát: hodnota1,""hodnota2"",""hodnota3"",...
+    const bunky: string[] = []
+    const parts = ocisteny.split(',""')
+
+    for (let i = 0; i < parts.length; i++) {
+      const val = parts[i]
+        .replace(/^""|""$/g, '')   // odstraň dvojité uvozovky
+        .replace(/""/g, '"')       // escapované uvozovky
+        .trim()
+      bunky.push(val)
+    }
+
+    return bunky
+  }
+
+  // Parser pro nový formát 2022+: standardní CSV s uvozovkami
+  function parseNovyRadek(radek: string): string[] {
+    const bunky: string[] = []
+    let current = ''
+    let inQuotes = false
+
+    for (let i = 0; i < radek.length; i++) {
+      const ch = radek[i]
+      if (ch === '"') {
+        inQuotes = !inQuotes
+      } else if (ch === ',' && !inQuotes) {
+        bunky.push(current.trim())
+        current = ''
+      } else {
+        current += ch
+      }
+    }
+    bunky.push(current.trim())
+    return bunky
+  }
+
+  // Parsuj hlavičku
+  const hlavickaRaw = radky[hlavickaIdx]
+  const hlavicka = jeStaryFormat
+    ? hlavickaRaw.split(',').map((s) => s.replace(/"/g, '').trim())
+    : parseNovyRadek(hlavickaRaw)
+
+  const mapa = mapujSloupce(hlavicka)
+
+  if (!mapa) {
+    return {
+      rok_metrik: rokOverride ?? 0,
+      celkem_radku: 0,
+      unikatnich_casopisu: 0,
+      radky: [],
+      kriticke_chyby: [`CSV: nelze namapovat sloupce. Hlavička: ${hlavicka.slice(0, 5).join(' | ')}`],
+      varovani: [],
+      celkem: 0,
+      ok: 0,
+      s_chybami: 0,
+      preskocene: 0,
+    }
+  }
+
+  const rok = rokOverride ?? detekujRok(prvniRadekText, hlavicka)
+  const parsovane: JCRRadek[] = []
+
+  for (let i = hlavickaIdx + 1; i < radky.length; i++) {
+    const radek = radky[i]
+    if (!radek?.trim()) continue
+
+    const bunky = jeStaryFormat
+      ? parseStaryRadek(radek)
+      : parseNovyRadek(radek)
+
+    if (bunky.every((b) => !b)) continue
+
+    const parsed = parseRadek(bunky, mapa, rok)
+    if (parsed) parsovane.push(parsed)
+  }
+
+  const unikatniISSN = new Set(parsovane.map((r) => r.issn ?? r.eissn ?? r.nazev))
+
   return {
-    celkem: radky.length,
-    ok: radky.length,
+    rok_metrik: rok,
+    celkem_radku: parsovane.length,
+    unikatnich_casopisu: unikatniISSN.size,
+    radky: parsovane,
+    kriticke_chyby,
+    varovani,
+    celkem: parsovane.length,
+    ok: parsovane.length,
     s_chybami: 0,
     preskocene: 0,
-    radky,
-    kriticke_chyby,
   }
 }
 
