@@ -1,6 +1,6 @@
 import { prihlasit } from '../../lib/auth'
 
-export function renderLogin(container: HTMLElement, onSuccess: () => void): void {
+export function renderLogin(container: HTMLElement): void {
   container.innerHTML = `
     <div class="login-wrap">
       <div class="login-box">
@@ -8,7 +8,7 @@ export function renderLogin(container: HTMLElement, onSuccess: () => void): void
           <span class="logo-zkratka">UHK</span>
           <span class="logo-nazev">DKRVO Kalkulačka</span>
         </div>
-        <p class="login-hint">Zadej svůj UHK email — pošleme ti přihlašovací odkaz.</p>
+        <p class="login-hint">Přihlaš se svým UHK emailem a heslem.</p>
         <div class="login-form">
           <input
             type="email"
@@ -17,7 +17,14 @@ export function renderLogin(container: HTMLElement, onSuccess: () => void): void
             placeholder="jmeno.prijmeni@uhk.cz"
             autocomplete="email"
           >
-          <button id="login-btn" class="btn-primary login-btn">Poslat odkaz</button>
+          <input
+            type="password"
+            id="login-heslo"
+            class="login-input"
+            placeholder="Heslo"
+            autocomplete="current-password"
+          >
+          <button id="login-btn" class="btn-primary login-btn">Přihlásit se</button>
         </div>
         <div id="login-status" class="login-status hidden"></div>
       </div>
@@ -25,39 +32,41 @@ export function renderLogin(container: HTMLElement, onSuccess: () => void): void
   `
 
   const emailInput = container.querySelector('#login-email') as HTMLInputElement
+  const hesloInput = container.querySelector('#login-heslo') as HTMLInputElement
   const loginBtn = container.querySelector('#login-btn') as HTMLButtonElement
   const status = container.querySelector('#login-status') as HTMLElement
 
   // Enter → odeslat
-  emailInput.addEventListener('keydown', e => {
+  hesloInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') loginBtn.click()
   })
 
   loginBtn.addEventListener('click', async () => {
     const email = emailInput.value.trim()
+    const heslo = hesloInput.value
+
     if (!email || !email.includes('@')) {
       zobrazStatus(status, 'Zadej platný email.', 'error')
       return
     }
+    if (!heslo) {
+      zobrazStatus(status, 'Zadej heslo.', 'error')
+      return
+    }
 
     loginBtn.disabled = true
-    loginBtn.textContent = 'Odesílám…'
+    loginBtn.textContent = 'Přihlašuji…'
 
-    const { chyba } = await prihlasit(email)
+    const { chyba } = await prihlasit(email, heslo)
 
     if (chyba) {
-      zobrazStatus(status, `Chyba: ${chyba}`, 'error')
+      zobrazStatus(status, chyba, 'error')
       loginBtn.disabled = false
-      loginBtn.textContent = 'Poslat odkaz'
-    } else {
-      zobrazStatus(
-        status,
-        `✅ Odkaz odeslán na ${email}. Zkontroluj email a klikni na odkaz.`,
-        'ok'
-      )
-      loginBtn.textContent = 'Odesláno'
-      onSuccess()
+      loginBtn.textContent = 'Přihlásit se'
+      hesloInput.value = ''
+      hesloInput.focus()
     }
+    // Po úspěchu onAuthStateChange v main.ts přepne na app.
   })
 }
 

@@ -113,15 +113,13 @@ async function init(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app')!
 
   try {
-    if (!supabase) {
-      throw (supabaseInitError ?? new Error('Supabase klient není dostupný.'))
-    }
+    if (!supabase) throw (supabaseInitError ?? new Error('Supabase klient není dostupný.'))
 
     // Zjisti stav přihlášení
     const { data: { session } } = await supabase.auth.getSession()
 
     if (!session) {
-      renderLogin(app, () => {})
+      renderLogin(app)
       return
     }
 
@@ -134,24 +132,27 @@ async function init(): Promise<void> {
           <div style="font-size:2rem;">⚠️</div>
           <div>Účet není nastaven. Kontaktuj administrátora.</div>
           <div style="font-size:0.8rem;color:#666;">${session.user.email}</div>
-          <button onclick="supabase.auth.signOut().then(()=>location.reload())"
+          <button id="btn-account-signout"
             style="margin-top:1rem;padding:0.5rem 1rem;background:#4f8ef7;border:none;border-radius:8px;color:white;cursor:pointer;">
             Odhlásit
           </button>
         </div>
       `
+      document.querySelector('#btn-account-signout')?.addEventListener('click', async () => {
+        await odhlasit()
+        location.reload()
+      })
       return
     }
 
     await renderApp()
 
   } catch (err) {
-    const app = document.querySelector<HTMLDivElement>('#app')!
     app.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:1rem;color:#f87171;background:#0f1117;padding:2rem;text-align:center;">
         <div style="font-size:2rem;">❌</div>
         <div style="font-weight:500;">Chyba při spuštění aplikace</div>
-        <div style="font-size:0.85rem;color:#888;max-width:500px;">${err}</div>
+        <div style="font-size:0.85rem;color:#888;max-width:500px;">${String(err)}</div>
         <button onclick="location.reload()"
           style="margin-top:1rem;padding:0.5rem 1rem;background:#4f8ef7;border:none;border-radius:8px;color:white;cursor:pointer;">
           Zkusit znovu
@@ -161,7 +162,7 @@ async function init(): Promise<void> {
   }
 }
 
-// Sleduj změny auth stavu (magic link callback)
+// Sleduj změny auth stavu
 if (supabase) {
   supabase.auth.onAuthStateChange(async (event, _session) => {
     if (event === 'SIGNED_IN') {
@@ -174,7 +175,7 @@ if (supabase) {
     } else if (event === 'SIGNED_OUT') {
       aktualniProfil = null
       const app = document.querySelector<HTMLDivElement>('#app')!
-      renderLogin(app, () => {})
+      renderLogin(app)
     }
   })
 }
