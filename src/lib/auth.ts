@@ -37,19 +37,28 @@ export async function odhlasit(): Promise<void> {
 
 // Načti profil přihlášeného uživatele
 export async function nactiProfil(): Promise<Profil | null> {
-  if (!supabase) return null
+  try {
+    if (!supabase) {
+      console.error('nactiProfil: Supabase klient není inicializovaný.')
+      return null
+    }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    console.log('Auth user:', user?.id, user?.email, userError)
+    if (!user) return null
 
-  const { data, error } = await supabase
-    .from('profily')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+    const { data, error } = await supabase
+      .from('profily')
+      .select('*')
+      .eq('id', user.id)
+      .single()
 
-  if (error || !data) return null
-  return data as Profil
+    console.log('Profil data:', data, 'Profil error:', error)
+    return (data as Profil | null) ?? null
+  } catch (err) {
+    console.error('nactiProfil exception:', err)
+    return null
+  }
 }
 
 // Počet čekajících návrhů (pro odznak v navigaci)
