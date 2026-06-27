@@ -364,3 +364,31 @@ td small { color: #666; font-size: 0.8rem; }
   border-radius: 10px;
   margin-left: auto;
 }
+/* ── Hodnocení badge (P1-P10, D1, Q1-Q4) ── */
+.h-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+}
+/* P1-P3 — zlatá */
+.h-p1 { background: #2a2000; color: #f4c430; border: 1px solid #8a6800; }
+/* P4-P5 — zelená světlá */
+.h-p5 { background: #0f2a1a; color: #4ade80; border: 1px solid #166534; }
+/* P6-P10 — zelená */
+.h-p10 { background: #0f2a1a; color: #2a9d5c; border: 1px solid #14532d; }
+/* D1 — modrá */
+.h-d1 { background: #0f1e2a; color: #4f8ef7; border: 1px solid #1e3a5f; }
+/* Q1-Q4 */
+.h-q1 { background: #0f2a1a; color: #2a9d5c; }
+.h-q2 { background: #1a2a0f; color: #6abf40; }
+.h-q3 { background: #2a2a0f; color: #c4a020; }
+.h-q4 { background: #2a1a0f; color: #e07b00; }
+/* Zdroj badge */
+.zdroj-badge {
+  font-size: 0.65rem;
+  color: #555;
+  margin-left: 0.25rem;
+}
