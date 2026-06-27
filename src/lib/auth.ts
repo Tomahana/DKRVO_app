@@ -38,13 +38,9 @@ export async function odhlasit(): Promise<void> {
 // Načti profil přihlášeného uživatele
 export async function nactiProfil(): Promise<Profil | null> {
   try {
-    if (!supabase) {
-      console.error('nactiProfil: Supabase klient není inicializovaný.')
-      return null
-    }
+    if (!supabase) return null
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    console.log('Auth user:', user?.id, user?.email, userError)
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
 
     const { data, error } = await supabase
@@ -53,10 +49,9 @@ export async function nactiProfil(): Promise<Profil | null> {
       .eq('id', user.id)
       .single()
 
-    console.log('Profil data:', data, 'Profil error:', error)
-    return (data as Profil | null) ?? null
-  } catch (err) {
-    console.error('nactiProfil exception:', err)
+    if (error || !data) return null
+    return data as Profil
+  } catch {
     return null
   }
 }
