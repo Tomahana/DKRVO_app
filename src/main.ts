@@ -2,6 +2,7 @@ import './style.css'
 import { renderImportJimp } from './modules/import-obd/ImportJimp'
 import { renderImportJsc } from './modules/import-obd/ImportJsc'
 import { renderImportBC } from './modules/import-obd/ImportBC'
+import { renderImportJCR } from './modules/casopisy/ImportJCR'
 import { renderLogin } from './modules/auth/Login'
 import './modules/import-obd/importJimp.css'
 import {
@@ -56,6 +57,7 @@ function renderModul(id: string): void {
     case 'import-jimp': renderImportJimp(obsah); break
     case 'import-jsc':  renderImportJsc(obsah);  break
     case 'import-bc':   renderImportBC(obsah);   break
+    case 'casopisy':    renderImportJCR(obsah);  break
     default:
       obsah.innerHTML = `
         <div class="placeholder">
