@@ -10,19 +10,23 @@ export interface Profil {
   aktivni: boolean
 }
 
-// Přihlášení přes magic link
-export async function prihlasit(email: string): Promise<{ chyba: string | null }> {
+// Přihlášení email + heslo
+export async function prihlasit(
+  email: string,
+  heslo: string
+): Promise<{ chyba: string | null }> {
   if (!supabase) {
     return { chyba: 'Supabase není nakonfigurovaný (chybí VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY).' }
   }
 
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: window.location.origin + window.location.pathname,
-    },
-  })
-  return { chyba: error?.message ?? null }
+  const { error } = await supabase.auth.signInWithPassword({ email, password: heslo })
+  if (error) {
+    if (error.message.includes('Invalid login')) {
+      return { chyba: 'Nesprávný email nebo heslo.' }
+    }
+    return { chyba: error.message }
+  }
+  return { chyba: null }
 }
 
 // Odhlášení
