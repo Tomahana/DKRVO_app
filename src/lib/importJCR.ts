@@ -586,6 +586,15 @@ export async function ulozitJCRDoSupabase(
   const varovani: string[] = []
   let ulozeno = 0
 
+  if (!supabase) {
+    return {
+      ulozeno: 0,
+      chyby: ['Supabase není nakonfigurovaný (chybí nebo je neplatné VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY).'],
+      varovani,
+      tabulka,
+    }
+  }
+
   for (const r of agregace) {
     const payload: Record<string, unknown> = {
       rok_metrik: rokMetrik,
