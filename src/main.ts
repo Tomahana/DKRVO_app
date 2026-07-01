@@ -24,11 +24,36 @@ const MODULY = [
   { id: 'reporty',      label: 'Reporty',        ikona: '📊', role: ['admin','prorektor','prodekan'] },
 ]
 
+const DEV_AUTH_BYPASS = import.meta.env.DEV && import.meta.env.VITE_DISABLE_AUTH !== 'false'
+const DEV_PROFIL: Profil = {
+  id: 'dev-local-user',
+  email: 'dev@uhk.cz',
+  jmeno: 'Vývoj',
+  prijmeni: 'Režim',
+  role: 'admin',
+  fakulta_kod: 'UHK',
+  aktivni: true,
+}
+
 let aktualniProfil: Profil | null = null
 let aktualniModul = 'import-jimp'
 
 function modulyProRoli(role: string) {
   return MODULY.filter(m => m.role.includes(role))
+}
+
+async function sTimeoutem<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
 }
 
 async function renderNav(aktivni: string, pocetNavrhu: number): Promise<void> {
@@ -115,17 +140,31 @@ async function init(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app')!
 
   try {
+    if (DEV_AUTH_BYPASS) {
+      aktualniProfil = DEV_PROFIL
+      await renderApp()
+      return
+    }
+
     if (!supabase) throw (supabaseInitError ?? new Error('Supabase klient není dostupný.'))
 
     // Zjisti stav přihlášení
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session } } = await sTimeoutem(
+      supabase.auth.getSession(),
+      7000,
+      'Vypršel čas při ověřování přihlášení. Zkus stránku obnovit.'
+    )
 
     if (!session) {
       renderLogin(app)
       return
     }
 
-    aktualniProfil = await nactiProfil()
+    aktualniProfil = await sTimeoutem(
+      nactiProfil(),
+      7000,
+      'Vypršel čas při načítání profilu. Zkus stránku obnovit.'
+    )
 
     if (!aktualniProfil) {
       // Uživatel je přihlášen v Auth ale nemá profil v tabulce profily
@@ -165,7 +204,7 @@ async function init(): Promise<void> {
 }
 
 // Sleduj změny auth stavu
-if (supabase) {
+if (supabase && !DEV_AUTH_BYPASS) {
   supabase.auth.onAuthStateChange(async (event, _session) => {
     if (event === 'SIGNED_IN') {
       aktualniProfil = await nactiProfil()
