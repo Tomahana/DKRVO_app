@@ -7,8 +7,9 @@ import {
   ulozitJCRDoSupabase,
   nactiHistoriiCasopisu,
   ulozitRokCasopisuDoSupabase,
+  vyhledejCasopisyVDatabazi,
 } from '../../lib/importJCR'
-import type { ImportVysledekJCR, CasopisAgregace, CasopisRokDetail } from '../../lib/importJCR'
+import type { ImportVysledekJCR, CasopisAgregace, CasopisRokDetail, CasopisVyhledany } from '../../lib/importJCR'
 
 interface JcrViewData {
   importVysledek: ImportVysledekJCR
@@ -17,9 +18,20 @@ interface JcrViewData {
 
 export function renderImportJCR(container: HTMLElement): void {
   let posledniData: JcrViewData | null = null
+  let hledaneZaznamy: CasopisVyhledany[] = []
   const detailCache = new Map<string, CasopisRokDetail[]>()
 
   container.innerHTML = `
+    <div class="import-wrap jcr-search-wrap">
+      <h2>Vyhledání časopisu v databázi</h2>
+      <p class="import-hint">Najdi časopis podle názvu / ISSN / eISSN a zobraz všechny roky. Párování roků se dělá přes ISSN i eISSN.</p>
+      <div class="jcr-search-controls">
+        <input id="jcr-search-input" class="login-input jcr-search-input" placeholder="Např. Nature, 1234-5678 nebo 2041-1723">
+        <button id="btn-jcr-search" class="btn-primary">Vyhledat</button>
+      </div>
+      <div id="jcr-search-status" class="import-chyby hidden"></div>
+      <div id="jcr-search-results" class="import-tabulka hidden"></div>
+    </div>
     <div class="import-wrap">
       <h2>Import JCR</h2>
       <p class="import-hint">Načti CSV/XLSX export JCR, spočítej metriky a ulož časopisy do Supabase. Detail časopisu umožní ruční úpravy napříč roky.</p>
@@ -56,6 +68,10 @@ export function renderImportJCR(container: HTMLElement): void {
   const detailStatus = container.querySelector('#jcr-detail-status') as HTMLElement
   const detailContent = container.querySelector('#jcr-detail-content') as HTMLElement
   const detailTitle = container.querySelector('#jcr-detail-title') as HTMLElement
+  const searchInput = container.querySelector('#jcr-search-input') as HTMLInputElement
+  const searchBtn = container.querySelector('#btn-jcr-search') as HTMLButtonElement
+  const searchStatus = container.querySelector('#jcr-search-status') as HTMLElement
+  const searchResults = container.querySelector('#jcr-search-results') as HTMLElement
 
   const zobrazStatus = (text: string, isError: boolean): void => {
     status.classList.remove('hidden')
@@ -76,6 +92,26 @@ export function renderImportJCR(container: HTMLElement): void {
   const skryjDetailStatus = (): void => {
     detailStatus.classList.add('hidden')
     detailStatus.textContent = ''
+  }
+
+  const zobrazSearchStatus = (text: string, tone: 'error' | 'ok' | 'warn'): void => {
+    searchStatus.classList.remove('hidden')
+    searchStatus.textContent = text
+    if (tone === 'error') {
+      searchStatus.style.color = '#f87171'
+      searchStatus.style.borderColor = '#5a2020'
+      searchStatus.style.background = '#2a1a1a'
+      return
+    }
+    if (tone === 'warn') {
+      searchStatus.style.color = '#fbbf24'
+      searchStatus.style.borderColor = '#5a4a20'
+      searchStatus.style.background = '#2a2410'
+      return
+    }
+    searchStatus.style.color = '#2a9d5c'
+    searchStatus.style.borderColor = '#1a4a2a'
+    searchStatus.style.background = '#0f2a1a'
   }
 
   const esc = (value: string): string =>
@@ -126,6 +162,37 @@ export function renderImportJCR(container: HTMLElement): void {
       jif_decil: cil.nejlepsi_jif_decil,
       jif_percentil: cil.nejlepsi_jif_percentil,
     }]
+  }
+
+  const renderSearchRows = (rows: CasopisVyhledany[]): void => {
+    if (rows.length === 0) {
+      searchResults.classList.add('hidden')
+      searchResults.innerHTML = ''
+      return
+    }
+    searchResults.classList.remove('hidden')
+    searchResults.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Název</th>
+            <th>ISSN</th>
+            <th>eISSN</th>
+            <th>Historie</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row, idx) => `
+            <tr>
+              <td>${esc(row.nazev)}</td>
+              <td>${esc(row.issn ?? '—')}</td>
+              <td>${esc(row.eissn ?? '—')}</td>
+              <td><button class="btn-secondary btn-jcr-detail" data-search-index="${idx}">Zobrazit roky</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `
   }
 
   const renderDetailTable = (
@@ -223,21 +290,19 @@ export function renderImportJCR(container: HTMLElement): void {
     })
   }
 
-  const otevriDetail = async (agregaceIndex: number): Promise<void> => {
-    if (!posledniData) return
-    const cil = posledniData.agregace[agregaceIndex]
-    if (!cil) return
-
+  const otevriDetailByIdent = async (
+    ident: Pick<CasopisAgregace, 'nazev' | 'issn' | 'eissn'>,
+    lokalni: CasopisRokDetail[] = []
+  ): Promise<void> => {
     detailModal.classList.remove('hidden')
     skryjDetailStatus()
-    detailTitle.textContent = `Detail: ${cil.nazev}`
+    detailTitle.textContent = `Detail: ${ident.nazev}`
     detailContent.innerHTML = '<div class="import-hint">Načítám data…</div>'
 
-    const key = keyCasopis(cil)
-    const lokalni = buildLocalDetailRows(cil, posledniData)
+    const key = keyCasopis(ident)
     let rows = detailCache.get(key) ?? lokalni
 
-    const historie = await nactiHistoriiCasopisu(cil)
+    const historie = await nactiHistoriiCasopisu(ident)
     if (historie.chyba) {
       zobrazDetailStatus(`Historie z DB není dostupná: ${historie.chyba}`, true)
     } else {
@@ -250,7 +315,42 @@ export function renderImportJCR(container: HTMLElement): void {
       }
     }
 
-    renderDetailTable(cil, rows)
+    renderDetailTable(ident, rows)
+  }
+
+  const otevriDetail = async (agregaceIndex: number): Promise<void> => {
+    if (!posledniData) return
+    const cil = posledniData.agregace[agregaceIndex]
+    if (!cil) return
+    const lokalni = buildLocalDetailRows(cil, posledniData)
+    await otevriDetailByIdent(cil, lokalni)
+  }
+
+  const vyhledatVDatabazi = async (): Promise<void> => {
+    const hledanyText = searchInput.value.trim()
+    if (!hledanyText) {
+      zobrazSearchStatus('Zadej text pro vyhledání (název / ISSN / eISSN).', 'error')
+      renderSearchRows([])
+      return
+    }
+    searchBtn.disabled = true
+    searchBtn.textContent = 'Hledám…'
+    const vysledek = await vyhledejCasopisyVDatabazi(hledanyText)
+    if (vysledek.chyba) {
+      hledaneZaznamy = []
+      renderSearchRows([])
+      zobrazSearchStatus(`Vyhledání selhalo: ${vysledek.chyba}`, 'error')
+    } else {
+      hledaneZaznamy = vysledek.zaznamy
+      renderSearchRows(hledaneZaznamy)
+      if (hledaneZaznamy.length === 0) {
+        zobrazSearchStatus(`V tabulce ${vysledek.tabulka} nebyla nalezena žádná shoda.`, 'warn')
+      } else {
+        zobrazSearchStatus(`Nalezeno ${hledaneZaznamy.length} časopisů v tabulce ${vysledek.tabulka}.`, 'ok')
+      }
+    }
+    searchBtn.disabled = false
+    searchBtn.textContent = 'Vyhledat'
   }
 
   dropZone.addEventListener('dragover', (e) => {
@@ -273,6 +373,16 @@ export function renderImportJCR(container: HTMLElement): void {
       posledniData = data
       status.classList.add('hidden')
     })
+  })
+
+  searchBtn.addEventListener('click', () => {
+    void vyhledatVDatabazi()
+  })
+  searchInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      void vyhledatVDatabazi()
+    }
   })
 
   saveBtn.addEventListener('click', async () => {
@@ -308,6 +418,13 @@ export function renderImportJCR(container: HTMLElement): void {
     if (detailBtn) {
       const idx = Number.parseInt(detailBtn.dataset.detailIndex ?? '', 10)
       if (Number.isFinite(idx)) void otevriDetail(idx)
+    }
+    const searchDetailBtn = target.closest('[data-search-index]') as HTMLElement | null
+    if (searchDetailBtn) {
+      const idx = Number.parseInt(searchDetailBtn.dataset.searchIndex ?? '', 10)
+      if (Number.isFinite(idx) && hledaneZaznamy[idx]) {
+        void otevriDetailByIdent(hledaneZaznamy[idx])
+      }
     }
   })
 }

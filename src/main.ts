@@ -24,12 +24,13 @@ const MODULY = [
   { id: 'reporty',      label: 'Reporty',        ikona: '📊', role: ['admin','prorektor','prodekan'] },
 ]
 
-const DEV_AUTH_BYPASS = import.meta.env.DEV && import.meta.env.VITE_DISABLE_AUTH !== 'false'
-const DEV_PROFIL: Profil = {
-  id: 'dev-local-user',
-  email: 'dev@uhk.cz',
-  jmeno: 'Vývoj',
-  prijmeni: 'Režim',
+const AUTH_REQUIRED = import.meta.env.VITE_REQUIRE_AUTH === 'true'
+const AUTH_BYPASS = !AUTH_REQUIRED
+const LOCAL_PROFIL: Profil = {
+  id: 'local-bypass-user',
+  email: 'bez-prihlaseni@uhk.cz',
+  jmeno: 'Lokální',
+  prijmeni: 'režim',
   role: 'admin',
   fakulta_kod: 'UHK',
   aktivni: true,
@@ -108,9 +109,9 @@ async function renderApp(): Promise<void> {
         <div class="sidebar-footer">
           <div class="uzivatel-info">
             <span class="uzivatel-jmeno">${aktualniProfil?.jmeno ?? aktualniProfil?.email ?? ''}</span>
-            <span class="uzivatel-role">${aktualniProfil?.role ?? ''}</span>
+            <span class="uzivatel-role">${AUTH_REQUIRED ? (aktualniProfil?.role ?? '') : 'bez přihlášení'}</span>
           </div>
-          <button id="btn-odhlasit" class="btn-odhlasit" title="Odhlásit">⏻</button>
+          ${AUTH_REQUIRED ? '<button id="btn-odhlasit" class="btn-odhlasit" title="Odhlásit">⏻</button>' : ''}
         </div>
       </aside>
       <main id="obsah" class="obsah"></main>
@@ -130,18 +131,21 @@ async function renderApp(): Promise<void> {
   })
 
   // Odhlášení
-  document.querySelector('#btn-odhlasit')!.addEventListener('click', async () => {
-    await odhlasit()
-    init()
-  })
+  const odhlasitBtn = document.querySelector<HTMLButtonElement>('#btn-odhlasit')
+  if (AUTH_REQUIRED && odhlasitBtn) {
+    odhlasitBtn.addEventListener('click', async () => {
+      await odhlasit()
+      init()
+    })
+  }
 }
 
 async function init(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app')!
 
   try {
-    if (DEV_AUTH_BYPASS) {
-      aktualniProfil = DEV_PROFIL
+    if (AUTH_BYPASS) {
+      aktualniProfil = LOCAL_PROFIL
       await renderApp()
       return
     }
@@ -204,7 +208,7 @@ async function init(): Promise<void> {
 }
 
 // Sleduj změny auth stavu
-if (supabase && !DEV_AUTH_BYPASS) {
+if (supabase && AUTH_REQUIRED) {
   supabase.auth.onAuthStateChange(async (event, _session) => {
     if (event === 'SIGNED_IN') {
       aktualniProfil = await nactiProfil()

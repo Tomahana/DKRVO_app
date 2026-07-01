@@ -86,6 +86,12 @@ export interface CasopisRokDetail {
   jif_percentil: number | null
 }
 
+export interface CasopisVyhledany {
+  nazev: string
+  issn: string | null
+  eissn: string | null
+}
+
 interface SloupceMap {
   nazev: number
   issn: number
@@ -720,10 +726,15 @@ export async function nactiHistoriiCasopisu(
   }
 
   let dotaz = supabase.from(CASOPISY_TABULKA).select('*')
+  const podminky: string[] = []
   if (identifikace.issn) {
-    dotaz = dotaz.eq('issn', identifikace.issn)
-  } else if (identifikace.eissn) {
-    dotaz = dotaz.eq('eissn', identifikace.eissn)
+    podminky.push(`issn.eq.${identifikace.issn}`, `eissn.eq.${identifikace.issn}`)
+  }
+  if (identifikace.eissn) {
+    podminky.push(`issn.eq.${identifikace.eissn}`, `eissn.eq.${identifikace.eissn}`)
+  }
+  if (podminky.length > 0) {
+    dotaz = dotaz.or(podminky.join(','))
   } else {
     dotaz = dotaz.eq('nazev', identifikace.nazev)
   }
@@ -739,6 +750,51 @@ export async function nactiHistoriiCasopisu(
     .sort((a, b) => b.rok_metrik - a.rok_metrik)
 
   return { radky, chyba: null, tabulka: CASOPISY_TABULKA }
+}
+
+export async function vyhledejCasopisyVDatabazi(
+  dotazText: string
+): Promise<{ zaznamy: CasopisVyhledany[]; chyba: string | null; tabulka: string }> {
+  const query = dotazText.trim()
+  if (!query) {
+    return { zaznamy: [], chyba: null, tabulka: CASOPISY_TABULKA }
+  }
+
+  if (!supabase) {
+    return {
+      zaznamy: [],
+      chyba: 'Supabase není nakonfigurovaný.',
+      tabulka: CASOPISY_TABULKA,
+    }
+  }
+
+  const like = `%${query}%`
+  const { data, error } = await supabase
+    .from(CASOPISY_TABULKA)
+    .select('nazev,issn,eissn')
+    .or(`nazev.ilike.${like},issn.ilike.${like},eissn.ilike.${like}`)
+    .limit(400)
+
+  if (error) {
+    return { zaznamy: [], chyba: error.message, tabulka: CASOPISY_TABULKA }
+  }
+
+  const seen = new Set<string>()
+  const zaznamy: CasopisVyhledany[] = []
+  for (const row of data ?? []) {
+    const rec = row as Record<string, unknown>
+    const nazev = String(rec.nazev ?? '').trim()
+    if (!nazev) continue
+    const issn = rec.issn ? String(rec.issn) : null
+    const eissn = rec.eissn ? String(rec.eissn) : null
+    const key = `${issn ?? ''}|${eissn ?? ''}|${nazev.toLowerCase()}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    zaznamy.push({ nazev, issn, eissn })
+  }
+
+  zaznamy.sort((a, b) => a.nazev.localeCompare(b.nazev, 'cs'))
+  return { zaznamy, chyba: null, tabulka: CASOPISY_TABULKA }
 }
 
 export async function ulozitRokCasopisuDoSupabase(
