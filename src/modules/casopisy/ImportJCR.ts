@@ -25,6 +25,7 @@ function renderRows(radky: CasopisRadek[]): string {
       <td class="td-nazev" title="${esc(r.nazev)}">${esc(r.nazev)}</td>
       <td>${esc(r.issn ?? '—')}</td>
       <td>${esc(r.eissn ?? '—')}</td>
+      <td title="${esc(r.kategorie ?? '—')}">${esc(r.kategorie ?? '—')}</td>
       <td>${r.ais_hodnota === null ? '—' : r.ais_hodnota.toFixed(3)}</td>
       <td>${esc(r.ais_kvartal ?? '—')}</td>
       <td>${r.jif_hodnota === null ? '—' : r.jif_hodnota.toFixed(3)}</td>
@@ -108,6 +109,15 @@ export function renderImportJCR(container: HTMLElement): void {
       <div class="stat"><span>${rokInput.value || '—'}</span>rok platnosti</div>
     `
 
+    if (parsed.detekovany_rok && parsed.detekovany_rok >= 1900 && parsed.detekovany_rok <= 2100) {
+      rokInput.value = String(parsed.detekovany_rok)
+      stats.innerHTML = `
+        <div class="stat"><span>${parsed.celkem_radku}</span>řádků</div>
+        <div class="stat ok"><span>${parsed.validnich_radku}</span>validních</div>
+        <div class="stat"><span>${parsed.detekovany_rok}</span>detekovaný rok</div>
+      `
+    }
+
     if (parsed.varovani.length > 0) {
       varovani.classList.remove('hidden')
       varovani.innerHTML = `<strong>Varování:</strong><ul>${parsed.varovani.map((v) => `<li>${esc(v)}</li>`).join('')}</ul>`
@@ -124,6 +134,7 @@ export function renderImportJCR(container: HTMLElement): void {
             <th>Název</th>
             <th>ISSN</th>
             <th>eISSN</th>
+            <th>Kategorie</th>
             <th>AIS</th>
             <th>AIS Q</th>
             <th>JIF</th>

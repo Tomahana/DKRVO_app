@@ -6,6 +6,7 @@ create table if not exists public.casopisy (
   nazev text not null,
   issn text not null default '',
   eissn text not null default '',
+  kategorie text,
   ais_hodnota numeric,
   ais_kvartal text,
   jif_hodnota numeric,

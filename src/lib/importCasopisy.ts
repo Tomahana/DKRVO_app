@@ -5,6 +5,7 @@ export interface CasopisRadek {
   nazev: string
   issn: string | null
   eissn: string | null
+  kategorie: string | null
   ais_hodnota: number | null
   ais_kvartal: string | null
   jif_hodnota: number | null
@@ -16,6 +17,7 @@ export interface ImportVysledekCasopisy {
   radky: CasopisRadek[]
   celkem_radku: number
   validnich_radku: number
+  detekovany_rok: number | null
   varovani: string[]
 }
 
@@ -24,6 +26,7 @@ const CASOPISY_TABULKA = import.meta.env.VITE_SUPABASE_CASOPISY_TABLE ?? 'casopi
 function parseCislo(raw: string): number | null {
   const txt = String(raw ?? '').trim()
   if (!txt) return null
+  if (txt.toUpperCase() === 'N/A') return null
   const cislo = Number.parseFloat(txt.replace(',', '.'))
   return Number.isFinite(cislo) ? cislo : null
 }
@@ -31,11 +34,13 @@ function parseCislo(raw: string): number | null {
 function normalizeIssn(raw: string): string | null {
   const txt = String(raw ?? '').trim().replace(/\s+/g, '')
   if (!txt) return null
+  if (txt.toUpperCase() === 'N/A') return null
   return txt.toUpperCase()
 }
 
 function normalizeQuartile(raw: string): string | null {
   const txt = String(raw ?? '').trim().toUpperCase()
+  if (!txt || txt === 'N/A') return null
   return /^Q[1-4]$/.test(txt) ? txt : null
 }
 
@@ -69,6 +74,7 @@ function parseCsvLine(line: string): string[] {
 function normalizeHeader(value: string): string {
   return String(value ?? '')
     .toLowerCase()
+    .replace(/;/g, ' ')
     .trim()
     .replace(/\s+/g, ' ')
 }
@@ -77,6 +83,7 @@ interface SloupceMap {
   nazev: number
   issn: number | null
   eissn: number | null
+  kategorie: number | null
   ais: number | null
   ais_q: number | null
   jif: number | null
@@ -108,6 +115,10 @@ function mapujSloupce(hlavicka: string[]): SloupceMap | null {
       const idx = najdi('eissn', 'e-issn')
       return idx >= 0 ? idx : null
     })(),
+    kategorie: (() => {
+      const idx = najdi('category', 'kategorie')
+      return idx >= 0 ? idx : null
+    })(),
     ais: (() => {
       const idx = najdi('article influence score', 'ais')
       return idx >= 0 ? idx : null
@@ -133,11 +144,41 @@ function mapujSloupce(hlavicka: string[]): SloupceMap | null {
   }
 }
 
+function detekujRok(rows: string[][], hlavicka: string[]): number | null {
+  for (const row of rows.slice(0, 5)) {
+    const text = row.join(' ')
+    const selectedYear = text.match(/selected jcr year:\s*(20\d{2})/i)
+    if (selectedYear) {
+      const rok = Number.parseInt(selectedYear[1], 10)
+      if (Number.isFinite(rok)) return rok
+    }
+  }
+  for (const h of hlavicka) {
+    const match = h.match(/\b(20\d{2})\s*jif\b/i) ?? h.match(/\bjif\s*(20\d{2})\b/i)
+    if (match) {
+      const rok = Number.parseInt(match[1], 10)
+      if (Number.isFinite(rok)) return rok
+    }
+  }
+  return null
+}
+
+function parseLegacyCsvLine(line: string): string[] {
+  const ocisteny = line
+    .trim()
+    .replace(/^"/, '')
+    .replace(/[",;\s]+$/, '')
+
+  return ocisteny
+    .split(',""')
+    .map((part) => part.replace(/""$/g, '').replace(/""/g, '"').trim())
+}
+
 function parseMatici(rawRows: string[][]): ImportVysledekCasopisy {
   const varovani: string[] = []
   const rows = rawRows.filter((row) => row.some((v) => String(v ?? '').trim() !== ''))
   if (rows.length === 0) {
-    return { radky: [], celkem_radku: 0, validnich_radku: 0, varovani: ['Soubor je prázdný.'] }
+    return { radky: [], celkem_radku: 0, validnich_radku: 0, detekovany_rok: null, varovani: ['Soubor je prázdný.'] }
   }
 
   const hlavickaIdx = rows.findIndex((row) => row.some((v) => normalizeHeader(v).includes('journal name') || normalizeHeader(v).includes('nazev')))
@@ -146,6 +187,7 @@ function parseMatici(rawRows: string[][]): ImportVysledekCasopisy {
       radky: [],
       celkem_radku: 0,
       validnich_radku: 0,
+      detekovany_rok: null,
       varovani: ['Nepodařilo se najít hlavičku se sloupcem názvu časopisu (Journal Name/Název).'],
     }
   }
@@ -157,11 +199,13 @@ function parseMatici(rawRows: string[][]): ImportVysledekCasopisy {
       radky: [],
       celkem_radku: 0,
       validnich_radku: 0,
+      detekovany_rok: null,
       varovani: ['Nepodařilo se namapovat povinné sloupce.'],
     }
   }
 
   const dataRows = rows.slice(hlavickaIdx + 1)
+  const detekovany_rok = detekujRok(rows, hlavicka)
   const parsed: CasopisRadek[] = []
   for (let i = 0; i < dataRows.length; i++) {
     const r = dataRows[i]
@@ -171,6 +215,7 @@ function parseMatici(rawRows: string[][]): ImportVysledekCasopisy {
       nazev,
       issn: mapa.issn === null ? null : normalizeIssn(String(r[mapa.issn] ?? '')),
       eissn: mapa.eissn === null ? null : normalizeIssn(String(r[mapa.eissn] ?? '')),
+      kategorie: mapa.kategorie === null ? null : (String(r[mapa.kategorie] ?? '').trim() || null),
       ais_hodnota: mapa.ais === null ? null : parseCislo(String(r[mapa.ais] ?? '')),
       ais_kvartal: mapa.ais_q === null ? null : normalizeQuartile(String(r[mapa.ais_q] ?? '')),
       jif_hodnota: mapa.jif === null ? null : parseCislo(String(r[mapa.jif] ?? '')),
@@ -187,16 +232,19 @@ function parseMatici(rawRows: string[][]): ImportVysledekCasopisy {
     radky: parsed,
     celkem_radku: dataRows.length,
     validnich_radku: parsed.length,
+    detekovany_rok,
     varovani,
   }
 }
 
 export function parseCasopisyCsv(text: string): ImportVysledekCasopisy {
-  const rows = text
+  const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .map(parseCsvLine)
+  const sample = lines.find((line) => line.length > 0) ?? ''
+  const legacy = sample.startsWith('"') && sample.includes(',""')
+  const rows = lines.map((line) => legacy ? parseLegacyCsvLine(line) : parseCsvLine(line))
   return parseMatici(rows)
 }
 
@@ -216,6 +264,7 @@ export function parseCasopisyXlsx(buffer: ArrayBuffer): ImportVysledekCasopisy {
       radky: [],
       celkem_radku: 0,
       validnich_radku: 0,
+      detekovany_rok: null,
       varovani: [`XLSX chyba: ${String(error)}`],
     }
   }
@@ -257,6 +306,7 @@ export async function ulozitCasopisyDoSupabase(
     nazev: r.nazev,
     issn: r.issn ?? '',
     eissn: r.eissn ?? '',
+    kategorie: r.kategorie,
     ais_hodnota: r.ais_hodnota,
     ais_kvartal: r.ais_kvartal,
     jif_hodnota: r.jif_hodnota,
