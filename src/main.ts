@@ -24,7 +24,9 @@ const MODULY = [
   { id: 'reporty',      label: 'Reporty',        ikona: '📊', role: ['admin','prorektor','prodekan'] },
 ]
 
-const AUTH_REQUIRED = import.meta.env.VITE_REQUIRE_AUTH === 'true'
+const AUTH_REQUIRED =
+  import.meta.env.VITE_REQUIRE_AUTH !== 'false' &&
+  import.meta.env.VITE_DISABLE_AUTH !== 'true'
 const AUTH_BYPASS = !AUTH_REQUIRED
 const LOCAL_PROFIL: Profil = {
   id: 'local-bypass-user',
@@ -153,11 +155,19 @@ async function init(): Promise<void> {
     if (!supabase) throw (supabaseInitError ?? new Error('Supabase klient není dostupný.'))
 
     // Zjisti stav přihlášení
-    const { data: { session } } = await sTimeoutem(
+    const { data: { session: initialSession } } = await sTimeoutem(
       supabase.auth.getSession(),
       7000,
       'Vypršel čas při ověřování přihlášení. Zkus stránku obnovit.'
     )
+
+    let session = initialSession
+    // Krátký retry pro případy, kdy se session po refreshi obnovuje se zpožděním.
+    if (!session) {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      const { data } = await supabase.auth.getSession()
+      session = data.session
+    }
 
     if (!session) {
       renderLogin(app)

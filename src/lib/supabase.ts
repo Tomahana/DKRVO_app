@@ -45,7 +45,14 @@ export const supabase = (() => {
   }
 
   try {
-    return createClient(effectiveSupabaseUrl, supabaseAnonKey)
+    return createClient(effectiveSupabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storageKey: 'dkrvo-auth',
+      },
+    })
   } catch (error) {
     initError = error instanceof Error ? error : new Error(String(error))
     return null
