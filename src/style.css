@@ -392,3 +392,63 @@ td small { color: #666; font-size: 0.8rem; }
   color: #555;
   margin-left: 0.25rem;
 }
+
+/* ── JCR detail modal + ruční úpravy ── */
+.jcr-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.jcr-modal-card {
+  width: min(1200px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  background: #141a26;
+  border: 1px solid #2a2f3d;
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.jcr-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.jcr-modal-head h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.jcr-detail-table input.jcr-input {
+  width: 100%;
+  min-width: 90px;
+  border: 1px solid #31384a;
+  background: #0f1117;
+  color: #e8e8e8;
+  border-radius: 6px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.8rem;
+}
+
+.jcr-detail-table input.jcr-input:focus {
+  outline: none;
+  border-color: #4f8ef7;
+}
+
+.btn-jcr-detail {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+.btn-jcr-save-year {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+}
