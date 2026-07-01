@@ -20,6 +20,13 @@ export interface JCRRadekRozsireny extends JCRRadek {
   ais_kvartal_vypocteny?: string
   ais_decil_vypocteny?: string
   ais_percentil_vypocteny?: number
+
+  jif_poradi?: number
+  jif_celkem?: number
+  jif_hodnoceni?: string
+  jif_kvartal_vypocteny?: string
+  jif_decil_vypocteny?: string
+  jif_percentil_vypocteny?: number
 }
 
 export interface CasopisAgregace {
@@ -38,8 +45,13 @@ export interface CasopisAgregace {
   ais_kvartal_zdroj: 'jcr' | 'vypocet' | null
 
   nejlepsi_jif: number | null
+  nejlepsi_jif_hodnoceni: string | null
   nejlepsi_jif_kvartal: string | null
+  nejlepsi_jif_decil: string | null
   nejlepsi_jif_percentil: number | null
+  nejlepsi_jif_poradi: number | null
+  nejlepsi_jif_celkem: number | null
+  jif_kvartal_zdroj: 'jcr' | 'vypocet' | null
 }
 
 export interface ImportVysledekJCR {
@@ -50,11 +62,28 @@ export interface ImportVysledekJCR {
   kriticke_chyby: string[]
   varovani: string[]
 
-  // zpětná kompatibilita pro existující UI
   celkem: number
   ok: number
   s_chybami: number
   preskocene: number
+}
+
+export interface CasopisRokDetail {
+  id?: string | number | null
+  rok_metrik: number
+  nazev: string
+  issn: string | null
+  eissn: string | null
+  ais_hodnota: number | null
+  ais_hodnoceni: string | null
+  ais_kvartal: string | null
+  ais_decil: string | null
+  ais_percentil: number | null
+  jif_hodnota: number | null
+  jif_hodnoceni: string | null
+  jif_kvartal: string | null
+  jif_decil: string | null
+  jif_percentil: number | null
 }
 
 interface SloupceMap {
@@ -62,7 +91,6 @@ interface SloupceMap {
   issn: number
   eissn: number
   kategorie: number
-  vydani: number | null
   ais: number | null
   ais_q: number | null
   jif: number
@@ -121,7 +149,6 @@ function parseRokText(text: string): number | null {
 }
 
 function mapujSloupce(hlavicka: string[]): SloupceMap | null {
-  // Normalizuj — lowercase, odstraň středníky a přebytečné mezery
   const h = hlavicka.map((s) =>
     String(s ?? '')
       .toLowerCase()
@@ -149,7 +176,6 @@ function mapujSloupce(hlavicka: string[]): SloupceMap | null {
     issn,
     eissn: eissn >= 0 ? eissn : -1,
     kategorie,
-    vydani: najdi('edition') >= 0 ? najdi('edition') : null,
     ais: najdi('article influence score') >= 0 ? najdi('article influence score') : null,
     ais_q: najdi('ais quartile') >= 0 ? najdi('ais quartile') : null,
     jif: najdi('jif', '2020 jif', '2021 jif', '2022 jif', '2023 jif', '2024 jif', '2025 jif'),
@@ -166,7 +192,6 @@ function detekujRokZahlavi(
   prvniData: string[] | null,
   prvniRadekText: string
 ): number {
-  // 1) Rok přímo v názvu sloupce, např. "2020 JIF"
   for (const sloupec of hlavicka) {
     const match = sloupec.match(/\b(20\d{2})\s*(?:jif|ais)\b/i)
       ?? sloupec.match(/\b(?:jif|ais)\s*(20\d{2})\b/i)
@@ -176,7 +201,6 @@ function detekujRokZahlavi(
     }
   }
 
-  // 2) Rok v samostatném sloupci "AIS Year" nebo "JIF Year"
   if (prvniData) {
     if (mapa.ais_year !== null) {
       const rok = parseRokText(prvniData[mapa.ais_year] ?? '')
@@ -188,7 +212,6 @@ function detekujRokZahlavi(
     }
   }
 
-  // 3) Fallback z textu před hlavičkou
   return parseRokText(prvniRadekText) ?? 0
 }
 
@@ -196,132 +219,120 @@ function parseRadek(bunky: string[], mapa: SloupceMap): JCRRadek | null {
   const nazev = (bunky[mapa.nazev] ?? '').trim()
   if (!nazev) return null
 
-  const issn = mapa.issn >= 0 ? normalizeIssn(bunky[mapa.issn] ?? '') : null
-  const eissn = mapa.eissn >= 0 ? normalizeIssn(bunky[mapa.eissn] ?? '') : null
-  const kategorie = mapa.kategorie >= 0 ? parseKategorie(bunky[mapa.kategorie] ?? '') : []
-
-  const ais_hodnota = mapa.ais !== null ? parseCislo(bunky[mapa.ais] ?? '') : null
-  const ais_kvartal = mapa.ais_q !== null ? normalizeQuartile(bunky[mapa.ais_q] ?? '') : null
-  const jif_hodnota = mapa.jif >= 0 ? parseCislo(bunky[mapa.jif] ?? '') : null
-  const jif_kvartal = mapa.jif_q !== null ? normalizeQuartile(bunky[mapa.jif_q] ?? '') : null
-  const jif_percentil = mapa.jif_p !== null ? parseCislo(bunky[mapa.jif_p] ?? '') : null
-
   return {
     nazev,
-    issn,
-    eissn,
-    kategorie,
-    ais_hodnota,
-    ais_kvartal,
-    jif_hodnota,
-    jif_kvartal,
-    jif_percentil,
+    issn: mapa.issn >= 0 ? normalizeIssn(bunky[mapa.issn] ?? '') : null,
+    eissn: mapa.eissn >= 0 ? normalizeIssn(bunky[mapa.eissn] ?? '') : null,
+    kategorie: mapa.kategorie >= 0 ? parseKategorie(bunky[mapa.kategorie] ?? '') : [],
+    ais_hodnota: mapa.ais !== null ? parseCislo(bunky[mapa.ais] ?? '') : null,
+    ais_kvartal: mapa.ais_q !== null ? normalizeQuartile(bunky[mapa.ais_q] ?? '') : null,
+    jif_hodnota: mapa.jif >= 0 ? parseCislo(bunky[mapa.jif] ?? '') : null,
+    jif_kvartal: mapa.jif_q !== null ? normalizeQuartile(bunky[mapa.jif_q] ?? '') : null,
+    jif_percentil: mapa.jif_p !== null ? parseCislo(bunky[mapa.jif_p] ?? '') : null,
+  }
+}
+
+function parseStaryRadek(radek: string): string[] {
+  const ocisteny = radek
+    .trim()
+    .replace(/^"/, '')
+    .replace(/[",;\s]+$/, '')
+
+  const parts = ocisteny.split(',""')
+  const bunky: string[] = []
+  for (const part of parts) {
+    const val = part
+      .replace(/""$/g, '')
+      .replace(/""/g, '"')
+      .trim()
+    bunky.push(val)
+  }
+  return bunky
+}
+
+function parseNovyRadek(radek: string): string[] {
+  const bunky: string[] = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < radek.length; i++) {
+    const ch = radek[i]
+    if (ch === '"') {
+      const escaped = inQuotes && radek[i + 1] === '"'
+      if (escaped) {
+        current += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (ch === ',' && !inQuotes) {
+      bunky.push(current.trim())
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  bunky.push(current.trim())
+  return bunky
+}
+
+function pripravImportVysledek(
+  rok_metrik: number,
+  radky: JCRRadek[],
+  kriticke_chyby: string[],
+  varovani: string[]
+): ImportVysledekJCR {
+  const unikatni = new Set(radky.map((r) => r.issn ?? r.eissn ?? r.nazev))
+  return {
+    rok_metrik,
+    celkem_radku: radky.length,
+    unikatnich_casopisu: unikatni.size,
+    radky,
+    kriticke_chyby,
+    varovani,
+    celkem: radky.length,
+    ok: radky.length,
+    s_chybami: 0,
+    preskocene: 0,
   }
 }
 
 export function parseJCRCsv(text: string, rokOverride?: number): ImportVysledekJCR {
   const kriticke_chyby: string[] = []
   const varovani: string[] = []
+  const lines = text.split(/\r?\n/).filter((r) => r.trim())
+  const prvniRadekText = lines[0] ?? ''
 
-  const radky = text.split(/\r?\n/).filter((r) => r.trim())
-
-  // Najdi hlavičkový řádek
   let hlavickaIdx = -1
-  const prvniRadekText = radky[0] ?? ''
-
-  for (let i = 0; i < Math.min(radky.length, 5); i++) {
-    if (radky[i].toLowerCase().includes('journal name')) {
+  for (let i = 0; i < Math.min(lines.length, 5); i++) {
+    if (lines[i].toLowerCase().includes('journal name')) {
       hlavickaIdx = i
       break
     }
   }
 
   if (hlavickaIdx < 0) {
-    return {
-      rok_metrik: rokOverride ?? 0,
-      celkem_radku: 0,
-      unikatnich_casopisu: 0,
-      radky: [],
-      kriticke_chyby: ['CSV: nenalezen hlavičkový řádek'],
-      varovani: [],
-      celkem: 0,
-      ok: 0,
-      s_chybami: 0,
-      preskocene: 0,
-    }
+    return pripravImportVysledek(rokOverride ?? 0, [], ['CSV: nenalezen hlavičkový řádek'], [])
   }
 
-  const vzorkovyRadek = radky[hlavickaIdx + 1] ?? ''
-  const jeStaryFormat = vzorkovyRadek.startsWith('"') && vzorkovyRadek.includes('""')
-
-  function parseStaryRadek(radek: string): string[] {
-    const ocisteny = radek
-      .trim()
-      .replace(/^"/, '')
-      .replace(/[",;\s]+$/, '')
-
-    const parts = ocisteny.split(',""')
-    const bunky: string[] = []
-
-    for (let i = 0; i < parts.length; i++) {
-      const val = parts[i]
-        .replace(/""$/g, '')
-        .replace(/""/g, '"')
-        .trim()
-      bunky.push(val)
-    }
-
-    return bunky
-  }
-
-  function parseNovyRadek(radek: string): string[] {
-    const bunky: string[] = []
-    let current = ''
-    let inQuotes = false
-
-    for (let i = 0; i < radek.length; i++) {
-      const ch = radek[i]
-      if (ch === '"') {
-        const jeEscaped = inQuotes && radek[i + 1] === '"'
-        if (jeEscaped) {
-          current += '"'
-          i++
-        } else {
-          inQuotes = !inQuotes
-        }
-      } else if (ch === ',' && !inQuotes) {
-        bunky.push(current.trim())
-        current = ''
-      } else {
-        current += ch
-      }
-    }
-    bunky.push(current.trim())
-    return bunky
-  }
-
-  const hlavickaRaw = radky[hlavickaIdx]
+  const sample = lines[hlavickaIdx + 1] ?? ''
+  const jeStaryFormat = sample.startsWith('"') && sample.includes('""')
+  const hlavickaRaw = lines[hlavickaIdx]
   const hlavicka = jeStaryFormat
     ? hlavickaRaw.split(',').map((s) => s.replace(/"/g, '').trim())
     : parseNovyRadek(hlavickaRaw)
-
   const mapa = mapujSloupce(hlavicka)
+
   if (!mapa) {
-    return {
-      rok_metrik: rokOverride ?? 0,
-      celkem_radku: 0,
-      unikatnich_casopisu: 0,
-      radky: [],
-      kriticke_chyby: [`CSV: nelze namapovat sloupce. Hlavička: ${hlavicka.slice(0, 6).join(' | ')}`],
-      varovani: [],
-      celkem: 0,
-      ok: 0,
-      s_chybami: 0,
-      preskocene: 0,
-    }
+    return pripravImportVysledek(
+      rokOverride ?? 0,
+      [],
+      [`CSV: nelze namapovat sloupce. Hlavička: ${hlavicka.slice(0, 6).join(' | ')}`],
+      []
+    )
   }
 
-  const dataRows = radky.slice(hlavickaIdx + 1)
+  const dataRows = lines.slice(hlavickaIdx + 1)
   const prvniData = dataRows.length > 0
     ? (jeStaryFormat ? parseStaryRadek(dataRows[0]) : parseNovyRadek(dataRows[0]))
     : null
@@ -335,19 +346,7 @@ export function parseJCRCsv(text: string, rokOverride?: number): ImportVysledekJ
     if (parsed) parsovane.push(parsed)
   }
 
-  const unikatni = new Set(parsovane.map((r) => r.issn ?? r.eissn ?? r.nazev))
-  return {
-    rok_metrik,
-    celkem_radku: parsovane.length,
-    unikatnich_casopisu: unikatni.size,
-    radky: parsovane,
-    kriticke_chyby,
-    varovani,
-    celkem: parsovane.length,
-    ok: parsovane.length,
-    s_chybami: 0,
-    preskocene: 0,
-  }
+  return pripravImportVysledek(rok_metrik, parsovane, kriticke_chyby, varovani)
 }
 
 export function parseJCRXlsx(buffer: ArrayBuffer, rokOverride?: number): ImportVysledekJCR {
@@ -371,78 +370,33 @@ export function parseJCRXlsx(buffer: ArrayBuffer, rokOverride?: number): ImportV
     }
 
     if (hlavickaIdx < 0) {
-      return {
-        rok_metrik: rokOverride ?? 0,
-        celkem_radku: 0,
-        unikatnich_casopisu: 0,
-        radky: [],
-        kriticke_chyby: ['XLSX: nenalezen hlavičkový řádek'],
-        varovani: [],
-        celkem: 0,
-        ok: 0,
-        s_chybami: 0,
-        preskocene: 0,
-      }
+      return pripravImportVysledek(rokOverride ?? 0, [], ['XLSX: nenalezen hlavičkový řádek'], [])
     }
 
     const hlavicka = rows[hlavickaIdx]
     const mapa = mapujSloupce(hlavicka)
     if (!mapa) {
-      return {
-        rok_metrik: rokOverride ?? 0,
-        celkem_radku: 0,
-        unikatnich_casopisu: 0,
-        radky: [],
-        kriticke_chyby: ['XLSX: nelze namapovat sloupce'],
-        varovani: [],
-        celkem: 0,
-        ok: 0,
-        s_chybami: 0,
-        preskocene: 0,
-      }
+      return pripravImportVysledek(rokOverride ?? 0, [], ['XLSX: nelze namapovat sloupce'], [])
     }
 
     const dataRows = rows.slice(hlavickaIdx + 1)
     const rok_metrik = rokOverride ?? detekujRokZahlavi(hlavicka, mapa, dataRows[0] ?? null, rows[0]?.join(' ') ?? '')
-    const parsovane = dataRows
-      .map((r) => parseRadek(r, mapa))
-      .filter((r): r is JCRRadek => r !== null)
-
-    const unikatni = new Set(parsovane.map((r) => r.issn ?? r.eissn ?? r.nazev))
-    return {
-      rok_metrik,
-      celkem_radku: parsovane.length,
-      unikatnich_casopisu: unikatni.size,
-      radky: parsovane,
-      kriticke_chyby: [],
-      varovani: [],
-      celkem: parsovane.length,
-      ok: parsovane.length,
-      s_chybami: 0,
-      preskocene: 0,
-    }
+    const parsed = dataRows
+      .map((row) => parseRadek(row, mapa))
+      .filter((row): row is JCRRadek => row !== null)
+    return pripravImportVysledek(rok_metrik, parsed, [], [])
   } catch (error) {
-    return {
-      rok_metrik: rokOverride ?? 0,
-      celkem_radku: 0,
-      unikatnich_casopisu: 0,
-      radky: [],
-      kriticke_chyby: [String(error)],
-      varovani: [],
-      celkem: 0,
-      ok: 0,
-      s_chybami: 0,
-      preskocene: 0,
-    }
+    return pripravImportVysledek(rokOverride ?? 0, [], [String(error)], [])
   }
 }
 
 function vypoctiPozici(poradi: number, celkem: number): PozicniMetriky {
   const percentil_pozice = (poradi / celkem) * 100
   const kvartal =
-    percentil_pozice <= 25 ? 'Q1' :
-      percentil_pozice <= 50 ? 'Q2' :
-        percentil_pozice <= 75 ? 'Q3' : 'Q4'
+    percentil_pozice <= 25 ? 'Q1'
+      : percentil_pozice <= 50 ? 'Q2'
+        : percentil_pozice <= 75 ? 'Q3'
+          : 'Q4'
   const decil = `D${Math.min(10, Math.ceil(percentil_pozice / 10))}`
 
   let hodnoceni: string
@@ -461,36 +415,37 @@ function vypoctiPozici(poradi: number, celkem: number): PozicniMetriky {
   return { poradi, celkem, percentil_pozice, hodnoceni, kvartal, decil }
 }
 
-export function formatujHodnoceni(hodnoceni: string | null): {
-  label: string
-  cssTrida: string
-  tooltip: string
-} {
-  if (!hodnoceni) return { label: '—', cssTrida: '', tooltip: '' }
+function scoreHodnoceni(hodnoceni: string | null | undefined): number {
+  return HODNOCENI_PORADI[hodnoceni ?? ''] ?? 0
+}
 
-  if (hodnoceni.startsWith('P')) {
-    const cislo = Number.parseInt(hodnoceni.slice(1), 10)
-    return {
-      label: hodnoceni,
-      cssTrida: cislo <= 3 ? 'h-p1' : cislo <= 5 ? 'h-p5' : 'h-p10',
-      tooltip: `Top ${cislo}% v oboru`,
-    }
+type MetricPrefix = 'ais' | 'jif'
+
+function aktualniHodnoceni(radek: JCRRadekRozsireny, prefix: MetricPrefix): string | null {
+  if (prefix === 'ais') return radek.ais_hodnoceni ?? radek.ais_kvartal ?? radek.ais_kvartal_vypocteny ?? null
+  return radek.jif_hodnoceni ?? radek.jif_kvartal ?? radek.jif_kvartal_vypocteny ?? null
+}
+
+function nastavPozici(radek: JCRRadekRozsireny, prefix: MetricPrefix, pozice: PozicniMetriky): void {
+  if (prefix === 'ais') {
+    radek.ais_poradi = pozice.poradi
+    radek.ais_celkem = pozice.celkem
+    radek.ais_hodnoceni = pozice.hodnoceni
+    radek.ais_kvartal_vypocteny = pozice.kvartal
+    radek.ais_decil_vypocteny = pozice.decil
+    radek.ais_percentil_vypocteny = pozice.percentil_pozice
+    return
   }
-  if (hodnoceni === 'D1') {
-    return { label: 'D1', cssTrida: 'h-d1', tooltip: 'Top 10% v oboru' }
-  }
-  if (hodnoceni.startsWith('Q')) {
-    const cislo = Number.parseInt(hodnoceni.slice(1), 10)
-    return {
-      label: hodnoceni,
-      cssTrida: `h-q${cislo}`,
-      tooltip: cislo === 1 ? 'Top 25% v oboru'
-        : cislo === 2 ? '25–50% v oboru'
-          : cislo === 3 ? '50–75% v oboru'
-            : 'Dolních 25% v oboru',
-    }
-  }
-  return { label: hodnoceni, cssTrida: '', tooltip: '' }
+  radek.jif_poradi = pozice.poradi
+  radek.jif_celkem = pozice.celkem
+  radek.jif_hodnoceni = pozice.hodnoceni
+  radek.jif_kvartal_vypocteny = pozice.kvartal
+  radek.jif_decil_vypocteny = pozice.decil
+  radek.jif_percentil_vypocteny = pozice.percentil_pozice
+}
+
+function valueForPrefix(radek: JCRRadekRozsireny, prefix: MetricPrefix): number | null {
+  return prefix === 'ais' ? radek.ais_hodnota : radek.jif_hodnota
 }
 
 export function vypoctiPoradi(radky: JCRRadekRozsireny[]): JCRRadekRozsireny[] {
@@ -506,27 +461,32 @@ export function vypoctiPoradi(radky: JCRRadekRozsireny[]): JCRRadekRozsireny[] {
   }
 
   for (const indexy of podleKategorie.values()) {
-    const hodnocene = indexy
-      .filter((idx) => vystup[idx].ais_hodnota !== null)
-      .sort((a, b) => (vystup[b].ais_hodnota ?? 0) - (vystup[a].ais_hodnota ?? 0))
-    const celkem = hodnocene.length
-
-    for (let idx = 0; idx < hodnocene.length; idx++) {
-      const i = hodnocene[idx]
-      const pozice = vypoctiPozici(idx + 1, celkem)
-      const aktualniScore = HODNOCENI_PORADI[vystup[i].ais_hodnoceni ?? ''] ?? 0
-      const noveScore = HODNOCENI_PORADI[pozice.hodnoceni] ?? 0
-      if (noveScore >= aktualniScore) {
-        vystup[i].ais_poradi = pozice.poradi
-        vystup[i].ais_celkem = pozice.celkem
-        vystup[i].ais_hodnoceni = pozice.hodnoceni
-        vystup[i].ais_kvartal_vypocteny = pozice.kvartal
-        vystup[i].ais_decil_vypocteny = pozice.decil
-        vystup[i].ais_percentil_vypocteny = pozice.percentil_pozice
+    for (const prefix of ['ais', 'jif'] as const) {
+      const hodnocene = indexy
+        .filter((idx) => valueForPrefix(vystup[idx], prefix) !== null)
+        .sort((a, b) => (valueForPrefix(vystup[b], prefix) ?? 0) - (valueForPrefix(vystup[a], prefix) ?? 0))
+      const celkem = hodnocene.length
+      for (let idx = 0; idx < hodnocene.length; idx++) {
+        const i = hodnocene[idx]
+        const pozice = vypoctiPozici(idx + 1, celkem)
+        if (scoreHodnoceni(pozice.hodnoceni) >= scoreHodnoceni(aktualniHodnoceni(vystup[i], prefix))) {
+          nastavPozici(vystup[i], prefix, pozice)
+        }
       }
     }
   }
+
   return vystup
+}
+
+function vyberNejlepsiRadek(
+  skupina: JCRRadekRozsireny[],
+  prefix: MetricPrefix
+): JCRRadekRozsireny | null {
+  return skupina.reduce((best, r) => {
+    if (!best) return r
+    return scoreHodnoceni(aktualniHodnoceni(r, prefix)) > scoreHodnoceni(aktualniHodnoceni(best, prefix)) ? r : best
+  }, null as JCRRadekRozsireny | null)
 }
 
 export function agregujMetriky(radky: JCRRadekRozsireny[]): CasopisAgregace[] {
@@ -539,49 +499,150 @@ export function agregujMetriky(radky: JCRRadekRozsireny[]): CasopisAgregace[] {
 
   return Array.from(skupiny.values()).map((skupina) => {
     const prvni = skupina[0]
-    const nejlepsiAis = skupina.reduce((best, r) => (r.ais_hodnota ?? -Infinity) > (best.ais_hodnota ?? -Infinity) ? r : best)
-    const nejlepsiJif = skupina.reduce((best, r) => (r.jif_hodnota ?? -Infinity) > (best.jif_hodnota ?? -Infinity) ? r : best)
-
-    const nejlepsiHodnoceni = skupina.reduce((best, r) => {
-      const h = r.ais_hodnoceni ?? r.ais_kvartal ?? null
-      const score = HODNOCENI_PORADI[h ?? ''] ?? 0
-      const bestScore = HODNOCENI_PORADI[best ?? ''] ?? 0
-      return score > bestScore ? h : best
-    }, null as string | null)
-
-    const radekHodnoceni = skupina.find((r) => (r.ais_hodnoceni ?? r.ais_kvartal ?? null) === nejlepsiHodnoceni) ?? null
-    const nejlepsiJifKvartal = skupina.reduce((best, r) => {
-      const q = r.jif_kvartal ?? null
-      const score = HODNOCENI_PORADI[q ?? ''] ?? 0
-      const bestScore = HODNOCENI_PORADI[best ?? ''] ?? 0
-      return score > bestScore ? q : best
-    }, null as string | null)
+    const nejlepsiAisValue = skupina.reduce((best, r) => (r.ais_hodnota ?? -Infinity) > (best.ais_hodnota ?? -Infinity) ? r : best)
+    const nejlepsiJifValue = skupina.reduce((best, r) => (r.jif_hodnota ?? -Infinity) > (best.jif_hodnota ?? -Infinity) ? r : best)
+    const nejlepsiAisRank = vyberNejlepsiRadek(skupina, 'ais')
+    const nejlepsiJifRank = vyberNejlepsiRadek(skupina, 'jif')
 
     return {
       nazev: prvni.nazev,
       issn: prvni.issn,
       eissn: prvni.eissn,
       kategorie: Array.from(new Set(skupina.flatMap((r) => r.kategorie))),
-      nejlepsi_ais: nejlepsiAis.ais_hodnota,
-      nejlepsi_ais_hodnoceni: nejlepsiHodnoceni,
-      nejlepsi_ais_kvartal: radekHodnoceni?.ais_kvartal ?? radekHodnoceni?.ais_kvartal_vypocteny ?? null,
-      nejlepsi_ais_decil: radekHodnoceni?.ais_decil_vypocteny ?? null,
-      nejlepsi_ais_percentil: radekHodnoceni?.ais_percentil_vypocteny ?? null,
-      nejlepsi_ais_poradi: radekHodnoceni?.ais_poradi ?? null,
-      nejlepsi_ais_celkem: radekHodnoceni?.ais_celkem ?? null,
-      ais_kvartal_zdroj: radekHodnoceni?.ais_kvartal ? 'jcr' : radekHodnoceni?.ais_kvartal_vypocteny ? 'vypocet' : null,
-      nejlepsi_jif: nejlepsiJif.jif_hodnota,
-      nejlepsi_jif_kvartal: nejlepsiJifKvartal,
-      nejlepsi_jif_percentil: nejlepsiJif.jif_percentil,
+      nejlepsi_ais: nejlepsiAisValue.ais_hodnota,
+      nejlepsi_ais_hodnoceni: nejlepsiAisRank?.ais_hodnoceni ?? nejlepsiAisRank?.ais_kvartal ?? null,
+      nejlepsi_ais_kvartal: nejlepsiAisRank?.ais_kvartal ?? nejlepsiAisRank?.ais_kvartal_vypocteny ?? null,
+      nejlepsi_ais_decil: nejlepsiAisRank?.ais_decil_vypocteny ?? null,
+      nejlepsi_ais_percentil: nejlepsiAisRank?.ais_percentil_vypocteny ?? null,
+      nejlepsi_ais_poradi: nejlepsiAisRank?.ais_poradi ?? null,
+      nejlepsi_ais_celkem: nejlepsiAisRank?.ais_celkem ?? null,
+      ais_kvartal_zdroj: nejlepsiAisRank?.ais_kvartal ? 'jcr' : nejlepsiAisRank?.ais_kvartal_vypocteny ? 'vypocet' : null,
+      nejlepsi_jif: nejlepsiJifValue.jif_hodnota,
+      nejlepsi_jif_hodnoceni: nejlepsiJifRank?.jif_hodnoceni ?? nejlepsiJifRank?.jif_kvartal ?? null,
+      nejlepsi_jif_kvartal: nejlepsiJifRank?.jif_kvartal ?? nejlepsiJifRank?.jif_kvartal_vypocteny ?? null,
+      nejlepsi_jif_decil: nejlepsiJifRank?.jif_decil_vypocteny ?? null,
+      nejlepsi_jif_percentil: nejlepsiJifRank?.jif_percentil_vypocteny ?? nejlepsiJifValue.jif_percentil,
+      nejlepsi_jif_poradi: nejlepsiJifRank?.jif_poradi ?? null,
+      nejlepsi_jif_celkem: nejlepsiJifRank?.jif_celkem ?? null,
+      jif_kvartal_zdroj: nejlepsiJifRank?.jif_kvartal ? 'jcr' : nejlepsiJifRank?.jif_kvartal_vypocteny ? 'vypocet' : null,
     }
   })
 }
+
+export function formatujHodnoceni(hodnoceni: string | null): {
+  label: string
+  cssTrida: string
+  tooltip: string
+} {
+  if (!hodnoceni) return { label: '—', cssTrida: '', tooltip: '' }
+  if (hodnoceni.startsWith('P')) {
+    const cislo = Number.parseInt(hodnoceni.slice(1), 10)
+    return {
+      label: hodnoceni,
+      cssTrida: cislo <= 3 ? 'h-p1' : cislo <= 5 ? 'h-p5' : 'h-p10',
+      tooltip: `Top ${cislo}% v oboru`,
+    }
+  }
+  if (hodnoceni === 'D1') return { label: 'D1', cssTrida: 'h-d1', tooltip: 'Top 10% v oboru' }
+  if (hodnoceni.startsWith('Q')) {
+    const cislo = Number.parseInt(hodnoceni.slice(1), 10)
+    return {
+      label: hodnoceni,
+      cssTrida: `h-q${cislo}`,
+      tooltip: cislo === 1 ? 'Top 25% v oboru'
+        : cislo === 2 ? '25–50% v oboru'
+          : cislo === 3 ? '50–75% v oboru'
+            : 'Dolních 25% v oboru',
+    }
+  }
+  return { label: hodnoceni, cssTrida: '', tooltip: '' }
+}
+
+function extractMissingColumn(message: string): string | null {
+  const byRelation = message.match(/column ([a-zA-Z0-9_]+) of relation .* does not exist/)
+  if (byRelation) return byRelation[1]
+  const bySchemaCache = message.match(/Could not find the '([a-zA-Z0-9_]+)' column/)
+  if (bySchemaCache) return bySchemaCache[1]
+  return null
+}
+
+function sanitizeConflict(finalPayload: Record<string, unknown>): string {
+  const cols = ['rok_metrik', 'issn', 'eissn', 'nazev'].filter((c) => c in finalPayload)
+  return cols.length > 0 ? cols.join(',') : 'nazev'
+}
+
+async function adaptivniUpsert(
+  tabulka: string,
+  payload: Record<string, unknown>
+): Promise<{ ok: boolean; varovani: string[]; chyba?: string }> {
+  if (!supabase) {
+    return { ok: false, varovani: [], chyba: 'Supabase není nakonfigurovaný.' }
+  }
+
+  let finalPayload: Record<string, unknown> = { ...payload }
+  const varovani: string[] = []
+
+  for (let pokus = 0; pokus < 20; pokus++) {
+    const upsertRes = await supabase
+      .from(tabulka)
+      .upsert(finalPayload, { onConflict: sanitizeConflict(finalPayload) })
+    if (!upsertRes.error) return { ok: true, varovani }
+
+    const missingCol = extractMissingColumn(upsertRes.error.message)
+    if (missingCol && missingCol in finalPayload) {
+      delete finalPayload[missingCol]
+      varovani.push(`Tabulka ${tabulka} neobsahuje sloupec "${missingCol}" — hodnota přeskočena.`)
+      continue
+    }
+
+    const insertRes = await supabase.from(tabulka).insert(finalPayload)
+    if (!insertRes.error) return { ok: true, varovani }
+
+    const insertMissing = extractMissingColumn(insertRes.error.message)
+    if (insertMissing && insertMissing in finalPayload) {
+      delete finalPayload[insertMissing]
+      varovani.push(`Tabulka ${tabulka} neobsahuje sloupec "${insertMissing}" — hodnota přeskočena.`)
+      continue
+    }
+
+    return { ok: false, varovani, chyba: insertRes.error.message }
+  }
+
+  return { ok: false, varovani, chyba: 'Nepodařilo se uložit po více pokusech.' }
+}
+
+function payloadFromAgregace(r: CasopisAgregace, rokMetrik: number): Record<string, unknown> {
+  return {
+    rok_metrik: rokMetrik,
+    nazev: r.nazev,
+    issn: r.issn,
+    eissn: r.eissn,
+    kategorie_text: r.kategorie.join(' | '),
+    ais_hodnota: r.nejlepsi_ais,
+    ais_hodnoceni: r.nejlepsi_ais_hodnoceni,
+    ais_kvartal: r.nejlepsi_ais_kvartal,
+    ais_decil: r.nejlepsi_ais_decil,
+    ais_percentil: r.nejlepsi_ais_percentil,
+    ais_poradi: r.nejlepsi_ais_poradi,
+    ais_celkem: r.nejlepsi_ais_celkem,
+    ais_kvartal_zdroj: r.ais_kvartal_zdroj,
+    jif_hodnota: r.nejlepsi_jif,
+    jif_hodnoceni: r.nejlepsi_jif_hodnoceni,
+    jif_kvartal: r.nejlepsi_jif_kvartal,
+    jif_decil: r.nejlepsi_jif_decil,
+    jif_percentil: r.nejlepsi_jif_percentil,
+    jif_poradi: r.nejlepsi_jif_poradi,
+    jif_celkem: r.nejlepsi_jif_celkem,
+    jif_kvartal_zdroj: r.jif_kvartal_zdroj,
+  }
+}
+
+const CASOPISY_TABULKA = import.meta.env.VITE_SUPABASE_CASOPISY_TABLE ?? 'casopisy'
 
 export async function ulozitJCRDoSupabase(
   agregace: CasopisAgregace[],
   rokMetrik: number
 ): Promise<{ ulozeno: number; chyby: string[]; varovani: string[]; tabulka: string }> {
-  const tabulka = import.meta.env.VITE_SUPABASE_CASOPISY_TABLE ?? 'casopisy'
   const chyby: string[] = []
   const varovani: string[] = []
   let ulozeno = 0
@@ -591,77 +652,121 @@ export async function ulozitJCRDoSupabase(
       ulozeno: 0,
       chyby: ['Supabase není nakonfigurovaný (chybí nebo je neplatné VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY).'],
       varovani,
-      tabulka,
+      tabulka: CASOPISY_TABULKA,
     }
   }
 
   for (const r of agregace) {
-    const payload: Record<string, unknown> = {
-      rok_metrik: rokMetrik,
-      nazev: r.nazev,
-      issn: r.issn,
-      eissn: r.eissn,
-      kategorie: r.kategorie,
-      ais_hodnota: r.nejlepsi_ais,
-      ais_hodnoceni: r.nejlepsi_ais_hodnoceni,
-      ais_kvartal: r.nejlepsi_ais_kvartal,
-      ais_decil: r.nejlepsi_ais_decil,
-      ais_percentil: r.nejlepsi_ais_percentil,
-      ais_poradi: r.nejlepsi_ais_poradi,
-      ais_celkem: r.nejlepsi_ais_celkem,
-      ais_kvartal_zdroj: r.ais_kvartal_zdroj,
-      jif_hodnota: r.nejlepsi_jif,
-      jif_kvartal: r.nejlepsi_jif_kvartal,
-      jif_percentil: r.nejlepsi_jif_percentil,
-    }
-
-    // Adaptace payloadu pro tabulky s menším počtem sloupců.
-    let finalPayload = { ...payload }
-    let adaptacniPokusy = 0
-    while (adaptacniPokusy < 15) {
-      adaptacniPokusy++
-      const conflictCols = ['rok_metrik', 'issn', 'eissn', 'nazev'].filter((c) => c in finalPayload)
-      const onConflict = conflictCols.length > 0 ? conflictCols.join(',') : 'nazev'
-
-      const upsertRes = await supabase.from(tabulka).upsert(finalPayload, { onConflict })
-      if (!upsertRes.error) {
-        ulozeno++
-        break
-      }
-
-      const missingColMatch = upsertRes.error.message.match(/column ([a-zA-Z0-9_]+) of relation .* does not exist/)
-        ?? upsertRes.error.message.match(/Could not find the '([a-zA-Z0-9_]+)' column/)
-      if (missingColMatch) {
-        const missingCol = missingColMatch[1]
-        if (missingCol in finalPayload) {
-          delete finalPayload[missingCol]
-          varovani.push(`Tabulka ${tabulka} neobsahuje sloupec "${missingCol}" — uloženo bez něj.`)
-          continue
-        }
-      }
-
-      // Fallback pro tabulky bez unique constraint.
-      const insertRes = await supabase.from(tabulka).insert(finalPayload)
-      if (!insertRes.error) {
-        ulozeno++
-        break
-      }
-
-      const insertMissingCol = insertRes.error.message.match(/column ([a-zA-Z0-9_]+) of relation .* does not exist/)
-        ?? insertRes.error.message.match(/Could not find the '([a-zA-Z0-9_]+)' column/)
-      if (insertMissingCol) {
-        const missingCol = insertMissingCol[1]
-        if (missingCol in finalPayload) {
-          delete finalPayload[missingCol]
-          varovani.push(`Tabulka ${tabulka} neobsahuje sloupec "${missingCol}" — uloženo bez něj.`)
-          continue
-        }
-      }
-
-      chyby.push(`${r.nazev}: ${insertRes.error.message}`)
-      break
+    const uloz = await adaptivniUpsert(CASOPISY_TABULKA, payloadFromAgregace(r, rokMetrik))
+    varovani.push(...uloz.varovani)
+    if (uloz.ok) {
+      ulozeno++
+    } else {
+      chyby.push(`${r.nazev}: ${uloz.chyba ?? 'neznámá chyba'}`)
     }
   }
 
-  return { ulozeno, chyby, varovani, tabulka }
+  return { ulozeno, chyby, varovani, tabulka: CASOPISY_TABULKA }
+}
+
+function detailFromAnyRow(radek: Record<string, unknown>): CasopisRokDetail {
+  const readNum = (...keys: string[]): number | null => {
+    for (const k of keys) {
+      const raw = radek[k]
+      if (raw === null || raw === undefined || raw === '') continue
+      const num = Number.parseFloat(String(raw).replace(',', '.'))
+      if (Number.isFinite(num)) return num
+    }
+    return null
+  }
+  const readStr = (...keys: string[]): string | null => {
+    for (const k of keys) {
+      const raw = radek[k]
+      if (raw === null || raw === undefined) continue
+      const txt = String(raw).trim()
+      if (txt) return txt
+    }
+    return null
+  }
+
+  return {
+    id: (radek.id as string | number | null | undefined) ?? null,
+    rok_metrik: Number.parseInt(String(radek.rok_metrik ?? radek.rok ?? 0), 10) || 0,
+    nazev: readStr('nazev') ?? '',
+    issn: readStr('issn'),
+    eissn: readStr('eissn'),
+    ais_hodnota: readNum('ais_hodnota'),
+    ais_hodnoceni: readStr('ais_hodnoceni'),
+    ais_kvartal: readStr('ais_kvartal'),
+    ais_decil: readStr('ais_decil'),
+    ais_percentil: readNum('ais_percentil'),
+    jif_hodnota: readNum('jif_hodnota', 'jif'),
+    jif_hodnoceni: readStr('jif_hodnoceni'),
+    jif_kvartal: readStr('jif_kvartal'),
+    jif_decil: readStr('jif_decil'),
+    jif_percentil: readNum('jif_percentil'),
+  }
+}
+
+export async function nactiHistoriiCasopisu(
+  identifikace: Pick<CasopisAgregace, 'nazev' | 'issn' | 'eissn'>
+): Promise<{ radky: CasopisRokDetail[]; chyba: string | null; tabulka: string }> {
+  if (!supabase) {
+    return {
+      radky: [],
+      chyba: 'Supabase není nakonfigurovaný.',
+      tabulka: CASOPISY_TABULKA,
+    }
+  }
+
+  let dotaz = supabase.from(CASOPISY_TABULKA).select('*')
+  if (identifikace.issn) {
+    dotaz = dotaz.eq('issn', identifikace.issn)
+  } else if (identifikace.eissn) {
+    dotaz = dotaz.eq('eissn', identifikace.eissn)
+  } else {
+    dotaz = dotaz.eq('nazev', identifikace.nazev)
+  }
+
+  const { data, error } = await dotaz
+  if (error) {
+    return { radky: [], chyba: error.message, tabulka: CASOPISY_TABULKA }
+  }
+
+  const radky = (data ?? [])
+    .map((r) => detailFromAnyRow(r as Record<string, unknown>))
+    .filter((r) => r.rok_metrik > 0)
+    .sort((a, b) => b.rok_metrik - a.rok_metrik)
+
+  return { radky, chyba: null, tabulka: CASOPISY_TABULKA }
+}
+
+export async function ulozitRokCasopisuDoSupabase(
+  detail: CasopisRokDetail
+): Promise<{ ok: boolean; chyba: string | null; varovani: string[]; tabulka: string }> {
+  const payload: Record<string, unknown> = {
+    rok_metrik: detail.rok_metrik,
+    nazev: detail.nazev,
+    issn: detail.issn,
+    eissn: detail.eissn,
+    ais_hodnota: detail.ais_hodnota,
+    ais_hodnoceni: detail.ais_hodnoceni,
+    ais_kvartal: detail.ais_kvartal,
+    ais_decil: detail.ais_decil,
+    ais_percentil: detail.ais_percentil,
+    jif_hodnota: detail.jif_hodnota,
+    jif_hodnoceni: detail.jif_hodnoceni,
+    jif_kvartal: detail.jif_kvartal,
+    jif_decil: detail.jif_decil,
+    jif_percentil: detail.jif_percentil,
+    manual_uprava: true,
+  }
+
+  const result = await adaptivniUpsert(CASOPISY_TABULKA, payload)
+  return {
+    ok: result.ok,
+    chyba: result.ok ? null : (result.chyba ?? 'Nepodařilo se uložit úpravu.'),
+    varovani: result.varovani,
+    tabulka: CASOPISY_TABULKA,
+  }
 }
